@@ -1300,8 +1300,10 @@
   function renderAvailProgress(){
     var el = document.getElementById('availProgress');
     if(!el) return;
-    var n = state.availabilities.length;
-    el.textContent = n + ' personne' + (n>1?'s ont':' a') + ' indiqué ses disponibilités jusqu\'ici.';
+    var names = state.availabilities.map(function(a){ return a.name; });
+    el.textContent = names.length
+      ? 'Ont indiqué leurs disponibilités : ' + names.join(', ')
+      : 'Personne n\'a encore répondu.';
   }
   function renderPhase(){
     var phase = currentPhase();
