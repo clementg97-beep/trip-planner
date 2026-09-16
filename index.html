@@ -135,12 +135,19 @@
   .stat .hint{ font-size:9px; color:var(--ink-soft); font-weight:500; margin-top:2px; }
 
   .you-pill .phase-btn{ background:var(--coral-soft); color:var(--coral); }
+  .you-pill .phase-btn:disabled{ background:var(--paper); color:var(--ink-soft); cursor:not-allowed; opacity:.8; }
 
   .stats.stats-3{ grid-template-columns:minmax(110px,1fr) minmax(140px,1.1fr) minmax(150px,1.2fr); }
   @media (max-width:720px){
     .stats.stats-3{ grid-template-columns:repeat(2,1fr); }
     .stats.stats-3 .stat:last-child{ grid-column:1/-1; }
   }
+  .best-dates-list{ margin-top:4px; display:flex; flex-direction:column; gap:3px; }
+  .best-dates-row{ display:flex; align-items:baseline; gap:5px; font-size:11px; }
+  .best-dates-row .rank{ color:var(--ink-soft); font-weight:600; font-size:9px; flex:none; }
+  .best-dates-row b{ flex:1; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .best-dates-row .cnt{ color:var(--teal); font-weight:700; font-size:10px; flex:none; }
+  .avail-unsaved{ font-size:10.5px; font-weight:700; color:var(--coral); }
 
   /* ---- availability phase ---- */
   .avail-intro{
@@ -553,8 +560,7 @@
     </div>
     <div class="stat" id="statBestDatesTile">
       <div class="k">📅 Meilleures dates</div>
-      <div class="v mono" id="statBestDates">—</div>
-      <div class="hint" id="statBestDatesHint"></div>
+      <div class="best-dates-list" id="statBestDatesList">—</div>
     </div>
   </div>
 
@@ -611,6 +617,7 @@
     <div class="avail-actions">
       <button class="btn-primary" id="saveAvailBtn">💾 Enregistrer mes disponibilités</button>
       <span class="hint" id="availSelectedCount"></span>
+      <span class="avail-unsaved" id="availUnsavedNote" hidden>⚠️ Modifications non enregistrées — clique sur "Enregistrer"</span>
     </div>
   </div>
 
@@ -803,6 +810,8 @@
   var state = { trip:null, listings:[], flights:[], activities:[], votes:[], customDestinations:[], availabilities:[] };
   var COLLECTION_OF = { listing:'listings/', flight:'flights/', activity:'activities/' };
   var mySelectedDates = new Set();
+  var lastSavedDates = new Set();
+  var availLoadedMine = false;
 
   var DESTINATIONS = [
     { key:'samana', emoji:'🌴', label:'Samaná, Rep Dom', countryId:'214', flightLabel:'✈️ ~4h40 de Montréal',
@@ -869,7 +878,7 @@
   document.getElementById('changeNameBtn').addEventListener('click', function(){ ensureName(true); });
 
   document.getElementById('phaseToggleBtn').addEventListener('click', function(){
-    if(!db) return;
+    if(!db || !isOrganizer()) return;
     var next = currentPhase()==='availability' ? 'trips' : 'availability';
     db.doc('trip/info').update({ phase: next }).catch(function(){});
   });
@@ -879,6 +888,9 @@
       db.doc('availabilities/' + myAvailKey(name)).set({
         name: name, dates: Array.from(mySelectedDates), updatedAt: Date.now()
       }).catch(function(){});
+      lastSavedDates = new Set(mySelectedDates);
+      availLoadedMine = true;
+      updateAvailSelectedCount();
     });
   });
   // ---- mandatory identification gate (shown once, on first visit) ----
@@ -1066,6 +1078,12 @@
   function currentPhase(){
     return (state.trip && state.trip.phase) || 'trips';
   }
+  // Self-reported name match, not real auth -- good enough to stop friends
+  // from casually opening the trips page before the organizer is ready.
+  function isOrganizer(){
+    var n = (youName || '').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+    return n === 'clement';
+  }
   function myAvailKey(name){ return name.replace(/[^a-zA-Z0-9_-]/g,'_'); }
   function myAvailDoc(){
     if(!youName) return null;
@@ -1104,20 +1122,41 @@
     return results;
   }
 
+  // Picks up to n best windows that don't overlap each other, so the
+  // three proposals are genuinely different options rather than the same
+  // week shifted by a day.
+  function topNonOverlappingWindows(results, n){
+    var picked = [];
+    for(var i=0; i<results.length && picked.length<n; i++){
+      var r = results[i];
+      if(r.count<=0) break;
+      var overlaps = picked.some(function(p){ return !(r.end < p.start || r.start > p.end); });
+      if(!overlaps) picked.push(r);
+    }
+    return picked;
+  }
+
+  function fmtRangeShort(startIso, endIso){
+    var s = dateOfISO(startIso), e = dateOfISO(endIso);
+    var sameMonth = s.getMonth()===e.getMonth() && s.getFullYear()===e.getFullYear();
+    var monthLabel = e.toLocaleDateString('fr-CA', { month:'short' });
+    return sameMonth
+      ? (s.getDate() + ' → ' + e.getDate() + ' ' + monthLabel)
+      : (s.getDate()+' '+s.toLocaleDateString('fr-CA',{month:'short'}) + ' → ' + e.getDate()+' '+monthLabel);
+  }
+
   function renderBestDates(){
-    var tile = document.getElementById('statBestDates');
-    var hint = document.getElementById('statBestDatesHint');
-    if(!tile) return;
-    var results = computeBestWindows();
-    if(!results.length || results[0].count===0){
-      tile.textContent = '—';
-      hint.textContent = state.availabilities.length ? 'Aucune période commune trouvée' : 'En attente des réponses';
+    var list = document.getElementById('statBestDatesList');
+    if(!list) return;
+    var top = topNonOverlappingWindows(computeBestWindows(), 3);
+    if(!top.length){
+      list.innerHTML = '<div class="v mono">—</div><div class="hint">' +
+        (state.availabilities.length ? 'Aucune période commune trouvée' : 'En attente des réponses') + '</div>';
       return;
     }
-    var best = results[0];
-    tile.textContent = fmtDayMonth(best.start) + ' → ' + fmtDayMonth(best.end);
-    hint.textContent = best.count + ' / ' + state.availabilities.length + ' dispo' + (best.count>1?'s':'') +
-      (best.names.length ? ' (' + best.names.join(', ') + ')' : '');
+    list.innerHTML = top.map(function(w, i){
+      return '<div class="best-dates-row"><span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="cnt">'+w.count+'/'+state.availabilities.length+'</span></div>';
+    }).join('');
   }
 
   function buildAvailCalendar(){
@@ -1201,9 +1240,17 @@
       updateAvailSelectedCount();
     }, { passive:false });
   }
+  function hasUnsavedAvailChanges(){
+    if(mySelectedDates.size !== lastSavedDates.size) return true;
+    var changed = false;
+    mySelectedDates.forEach(function(d){ if(!lastSavedDates.has(d)) changed = true; });
+    return changed;
+  }
   function updateAvailSelectedCount(){
     var el = document.getElementById('availSelectedCount');
     if(el) el.textContent = mySelectedDates.size + ' jour' + (mySelectedDates.size>1?'s':'') + ' sélectionné' + (mySelectedDates.size>1?'s':'');
+    var note = document.getElementById('availUnsavedNote');
+    if(note) note.hidden = !hasUnsavedAvailChanges();
   }
   function renderAvailProgress(){
     var el = document.getElementById('availProgress');
@@ -1220,18 +1267,24 @@
     if(phase === 'availability'){
       tripsView.hidden = true;
       availView.hidden = false;
-      if(mySelectedDates.size===0){
+      if(!availLoadedMine){
         var mine = myAvailDoc();
-        if(mine) mySelectedDates = new Set(mine.dates||[]);
+        if(mine){
+          mySelectedDates = new Set(mine.dates||[]);
+          lastSavedDates = new Set(mine.dates||[]);
+          availLoadedMine = true;
+        }
       }
       buildAvailCalendar();
       renderAvailProgress();
-      toggleBtn.textContent = '🧳 Ouvrir la page voyages';
+      toggleBtn.textContent = isOrganizer() ? '🔓 Ouvrir la page voyages' : '🔒 Réservé à l\'organisateur';
+      toggleBtn.disabled = !isOrganizer();
     } else {
       tripsView.hidden = false;
       availView.hidden = true;
       renderBestDates();
-      toggleBtn.textContent = '📅 Revenir aux disponibilités';
+      toggleBtn.textContent = isOrganizer() ? '📅 Revenir aux disponibilités' : '🔒 Réservé à l\'organisateur';
+      toggleBtn.disabled = !isOrganizer();
     }
   }
 
