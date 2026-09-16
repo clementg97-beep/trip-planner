@@ -146,6 +146,7 @@
   .best-dates-row{ display:flex; align-items:baseline; gap:5px; font-size:11px; }
   .best-dates-row .rank{ color:var(--ink-soft); font-weight:600; font-size:9px; flex:none; }
   .best-dates-row b{ flex:1; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .best-dates-row .dur{ color:var(--ink-soft); font-size:9px; flex:none; }
   .best-dates-row .cnt{ color:var(--teal); font-weight:700; font-size:10px; flex:none; }
   .avail-unsaved{ font-size:10.5px; font-weight:700; color:var(--coral); }
 
@@ -1072,9 +1073,6 @@
       end: t.availWindowEnd || '2027-03-31'
     };
   }
-  function tripLengthDays(){
-    return (state.trip && state.trip.tripLengthDays) || 7;
-  }
   function currentPhase(){
     return (state.trip && state.trip.phase) || 'trips';
   }
@@ -1097,28 +1095,47 @@
     return counts;
   }
 
-  // For each candidate window of tripLengthDays() within the availability
-  // window, count people free on EVERY day of it (not just the sum) --
-  // that's the number who could actually all go on that exact trip.
+  // No fixed trip length: for every start day, take the shortest viable
+  // window (MIN_TRIP_DAYS) and, if a group is free for all of it, keep
+  // extending it one day at a time for as long as that exact same group
+  // stays free -- so the result is the longest run at that start with the
+  // best possible headcount, not a headcount forced into a fixed length.
+  var MIN_TRIP_DAYS = 6;
+  function namesFreeOn(iso){
+    return state.availabilities.filter(function(a){ return (a.dates||[]).indexOf(iso)!==-1; }).map(function(a){ return a.name; });
+  }
   function computeBestWindows(){
     if(!state.availabilities.length) return [];
-    var length = tripLengthDays();
     var w = availWindow();
     var start = dateOfISO(w.start), end = dateOfISO(w.end);
     var results = [];
     for(var d = new Date(start); ; d.setDate(d.getDate()+1)){
-      var winEnd = new Date(d); winEnd.setDate(winEnd.getDate() + length - 1);
+      var winEnd = new Date(d); winEnd.setDate(winEnd.getDate() + MIN_TRIP_DAYS - 1);
       if(winEnd > end) break;
-      var isoDays = [];
-      for(var i=0;i<length;i++){ var dd = new Date(d); dd.setDate(dd.getDate()+i); isoDays.push(isoOfDate(dd)); }
       var namesEveryDay = null;
-      isoDays.forEach(function(iso){
-        var names = state.availabilities.filter(function(a){ return (a.dates||[]).indexOf(iso)!==-1; }).map(function(a){ return a.name; });
+      for(var i=0; i<MIN_TRIP_DAYS; i++){
+        var dd = new Date(d); dd.setDate(dd.getDate()+i);
+        var names = namesFreeOn(isoOfDate(dd));
         namesEveryDay = namesEveryDay===null ? names : namesEveryDay.filter(function(n){ return names.indexOf(n)!==-1; });
-      });
-      results.push({ start: isoOfDate(d), end: isoOfDate(winEnd), names: namesEveryDay, count: namesEveryDay.length });
+      }
+      if(!namesEveryDay.length) continue;
+      var extendedEnd = new Date(winEnd);
+      while(true){
+        var nextDay = new Date(extendedEnd); nextDay.setDate(nextDay.getDate()+1);
+        if(nextDay > end) break;
+        var namesOnNextDay = namesFreeOn(isoOfDate(nextDay));
+        var stillAllPresent = namesEveryDay.every(function(n){ return namesOnNextDay.indexOf(n)!==-1; });
+        if(!stillAllPresent) break;
+        extendedEnd = nextDay;
+      }
+      results.push({ start: isoOfDate(d), end: isoOfDate(extendedEnd), names: namesEveryDay, count: namesEveryDay.length });
     }
-    results.sort(function(a,b){ return b.count - a.count; });
+    results.sort(function(a,b){
+      if(b.count !== a.count) return b.count - a.count;
+      var lenA = (dateOfISO(a.end) - dateOfISO(a.start));
+      var lenB = (dateOfISO(b.end) - dateOfISO(b.start));
+      return lenB - lenA;
+    });
     return results;
   }
 
@@ -1155,7 +1172,8 @@
       return;
     }
     list.innerHTML = top.map(function(w, i){
-      return '<div class="best-dates-row"><span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="cnt">'+w.count+'/'+state.availabilities.length+'</span></div>';
+      var days = Math.round((dateOfISO(w.end) - dateOfISO(w.start)) / 86400000) + 1;
+      return '<div class="best-dates-row"><span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="dur">'+days+'j</span><span class="cnt">'+w.count+'/'+state.availabilities.length+'</span></div>';
     }).join('');
   }
 
