@@ -170,15 +170,6 @@
   }
   .avail-day.selected .count-dot{ color:#fff8f5; }
   .avail-actions{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
-  .avail-settings{
-    background:var(--paper-raised); border:1px solid var(--line); border-radius:14px;
-    padding:16px 18px; box-shadow:var(--shadow);
-  }
-  .avail-settings summary{ font-size:11.5px; font-weight:700; color:var(--ink-soft); cursor:pointer; }
-  .avail-settings-body{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:14px; }
-  .avail-settings-body .field{ display:flex; flex-direction:column; gap:5px; }
-  .avail-settings-body label{ margin:0; }
-  .avail-settings-body input{ width:auto; }
 
   /* ---- tabs ---- */
   .tabs{
@@ -620,24 +611,6 @@
       <button class="btn-primary" id="saveAvailBtn">💾 Enregistrer mes disponibilités</button>
       <span class="hint" id="availSelectedCount"></span>
     </div>
-    <details class="avail-settings">
-      <summary>⚙️ Réglages (organisateur)</summary>
-      <div class="avail-settings-body">
-        <div class="field">
-          <label>Début de la période</label>
-          <input type="date" id="availWindowStartInput">
-        </div>
-        <div class="field">
-          <label>Fin de la période</label>
-          <input type="date" id="availWindowEndInput">
-        </div>
-        <div class="field">
-          <label>Durée du voyage (jours)</label>
-          <input type="number" min="1" max="60" id="tripLengthInput" style="width:70px;">
-        </div>
-        <button class="btn-primary" id="openTripsBtn">🔓 Ouvrir la page voyages pour tout le monde →</button>
-      </div>
-    </details>
   </div>
 
 </div>
@@ -688,9 +661,13 @@
         <input type="url" data-f="flightUrl" placeholder="https://www.google.com/travel/flights/…">
         <p class="field-hint">💡 Sur Google Flights, cherchez avec les bonnes dates puis copiez l'URL de la page de résultats — le lien gardera les dates.</p>
       </div>
-      <div class="full">
-        <label>Notes vol (une info par ligne, avec emoji)</label>
-        <textarea data-f="flightNotes" placeholder="✈️ Durée : ~5h&#10;📅 X vols/semaine&#10;💰 XXX-XXX $ CA (aller-retour)&#10;🚗 Logement à ~X de route de l'aéroport"></textarea>
+      <div>
+        <label>Durée du vol</label>
+        <input type="text" data-f="flightDuration" placeholder="~5h">
+      </div>
+      <div>
+        <label>Logement à combien de temps de route (aéroport → logement)</label>
+        <input type="text" data-f="drivingTime" placeholder="~45 min de route">
       </div>
     </div>
 
@@ -895,10 +872,6 @@
     var next = currentPhase()==='availability' ? 'trips' : 'availability';
     db.doc('trip/info').update({ phase: next }).catch(function(){});
   });
-  document.getElementById('openTripsBtn').addEventListener('click', function(){
-    if(!db) return;
-    db.doc('trip/info').update({ phase: 'trips' }).catch(function(){});
-  });
   document.getElementById('saveAvailBtn').addEventListener('click', function(){
     ensureName().then(function(name){
       if(!db) return;
@@ -907,16 +880,6 @@
       }).catch(function(){});
     });
   });
-  document.getElementById('availWindowStartInput').addEventListener('change', function(e){
-    if(db) db.doc('trip/info').update({ availWindowStart: e.target.value }).catch(function(){});
-  });
-  document.getElementById('availWindowEndInput').addEventListener('change', function(e){
-    if(db) db.doc('trip/info').update({ availWindowEnd: e.target.value }).catch(function(){});
-  });
-  document.getElementById('tripLengthInput').addEventListener('change', function(e){
-    if(db) db.doc('trip/info').update({ tripLengthDays: Number(e.target.value) || 7 }).catch(function(){});
-  });
-
   // ---- mandatory identification gate (shown once, on first visit) ----
   (function initNameGate(){
     var gate = document.getElementById('nameGate');
@@ -1092,8 +1055,8 @@
   function availWindow(){
     var t = state.trip || {};
     return {
-      start: t.availWindowStart || todayISO(),
-      end: t.availWindowEnd || addDaysISO(todayISO(), 120)
+      start: t.availWindowStart || '2027-01-01',
+      end: t.availWindowEnd || '2027-03-31'
     };
   }
   function tripLengthDays(){
@@ -1206,16 +1169,6 @@
     var n = state.availabilities.length;
     el.textContent = n + ' personne' + (n>1?'s ont':' a') + ' indiqué ses disponibilités jusqu\'ici.';
   }
-  function syncAvailSettingsInputs(){
-    var w = availWindow();
-    var s = document.getElementById('availWindowStartInput');
-    var e = document.getElementById('availWindowEndInput');
-    var l = document.getElementById('tripLengthInput');
-    if(s && document.activeElement!==s) s.value = w.start;
-    if(e && document.activeElement!==e) e.value = w.end;
-    if(l && document.activeElement!==l) l.value = tripLengthDays();
-  }
-
   function renderPhase(){
     var phase = currentPhase();
     var tripsView = document.getElementById('tripsView');
@@ -1231,7 +1184,6 @@
       }
       buildAvailCalendar();
       renderAvailProgress();
-      syncAvailSettingsInputs();
       toggleBtn.textContent = '🧳 Ouvrir la page voyages';
     } else {
       tripsView.hidden = false;
@@ -1439,6 +1391,9 @@
     var ratingChip = item.rating ? '<span class="chip">⭐ '+item.rating+(item.reviewCount?' ('+item.reviewCount+' avis)':'')+'</span>' : '';
     var roomsChip = (item.bedrooms||item.beds||item.bathrooms)
       ? '<span class="chip">🛏️ '+(item.bedrooms||'?')+' ch · '+(item.beds||'?')+' lits · '+(item.bathrooms||'?')+' sdb</span>' : '';
+    var flight = flightForDest(item.destination || 'autre');
+    var flightDurationChip = (flight && flight.duration) ? '<span class="chip">✈️ '+escapeHtml(flight.duration)+'</span>' : '';
+    var drivingTimeChip = (flight && flight.drivingTime) ? '<span class="chip">🚗 '+escapeHtml(flight.drivingTime)+'</span>' : '';
     var hypeBadge = vs.score >= HYPE_THRESHOLD ? '<span class="hype-badge">🔥 Hypé</span>' : '';
     var commentsHtml = vs.comments.length ? (
       '<div class="comments">' + vs.comments.map(function(c){
@@ -1462,7 +1417,7 @@
           '<div class="trip-detail" id="detail-'+item.id+'" hidden>' +
             '<div class="trip-chips">' +
               '<a href="'+mapUrl+'" target="_blank" rel="noopener" class="chip map-link">'+escapeHtml(item.location||'Lieu ?')+' 📍</a>' +
-              roomsChip + ratingChip +
+              roomsChip + ratingChip + flightDurationChip + drivingTimeChip +
             '</div>' +
             linesToBullets(item.highlights, 'activity-notes') +
             linesToBullets(item.notes, 'activity-notes') +
@@ -1593,7 +1548,8 @@
           destination: dest, route: route, airline: get('airline'),
           dateStart: get('flightDateStart') || null, dateEnd: get('flightDateEnd') || null,
           price: get('flightPrice') ? Number(get('flightPrice')) : null,
-          url: get('flightUrl'), notes: get('flightNotes'), addedBy: name, createdAt: now
+          url: get('flightUrl'), duration: get('flightDuration'), drivingTime: get('drivingTime'),
+          addedBy: name, createdAt: now
         };
         if(db){
           db.doc('listings/' + uid()).set(listing).catch(function(){});
