@@ -243,15 +243,11 @@
   .map-pin.active .pin-shape{ fill:var(--teal); }
   .map-pin.active .pin-city{ font-weight:800; }
   .map-pin .pin-city{
-    font-size:32px; font-weight:700; fill:var(--ink); font-family:'Work Sans',sans-serif;
+    font-size:23px; font-weight:700; fill:var(--ink); font-family:'Work Sans',sans-serif;
     paint-order:stroke; stroke:var(--paper-raised); stroke-width:6px; stroke-linejoin:round;
   }
   .map-pin .pin-country{
     font-size:23px; font-weight:600; fill:var(--ink-soft); font-family:'Work Sans',sans-serif;
-    paint-order:stroke; stroke:var(--paper-raised); stroke-width:5px; stroke-linejoin:round;
-  }
-  .map-pin .pin-sub{
-    font-size:23px; fill:var(--ink-soft); font-weight:600;
     paint-order:stroke; stroke:var(--paper-raised); stroke-width:5px; stroke-linejoin:round;
   }
 
@@ -986,7 +982,7 @@
   var mapBuilt = false;
   function pinDefs(){
     return allDests().filter(function(d){ return d.key!=='autre'; }).map(function(d){
-      return { key:d.key, rawLabel:d.label, sub:d.flightLabel };
+      return { key:d.key, rawLabel:d.label };
     });
   }
 
@@ -1033,7 +1029,6 @@
           '<circle class="pin-hole" cx="0" cy="-20" r="7.5"></circle>' +
           '<text class="pin-city" x="0" y="26" text-anchor="middle">'+escapeHtml(parts[0])+'</text>' +
           (parts[1] ? '<text class="pin-country" x="0" y="46" text-anchor="middle">'+escapeHtml(parts[1])+'</text>' : '') +
-          (p.sub ? '<text class="pin-sub" x="0" y="'+(parts[1]?70:52)+'" text-anchor="middle">'+escapeHtml(p.sub)+'</text>' : '') +
         '</g>';
     }).join('');
 
