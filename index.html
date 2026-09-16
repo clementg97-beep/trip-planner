@@ -1144,6 +1144,11 @@
     var n = (youName || '').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
     return n === 'clement';
   }
+  // Only the person who added a listing/activity, or the organizer, may
+  // edit or delete it -- everyone else can read and vote/comment only.
+  function canEdit(item){
+    return !!item && (youName === item.addedBy || isOrganizer());
+  }
   function myAvailKey(name){ return name.replace(/[^a-zA-Z0-9_-]/g,'_'); }
   function myAvailDoc(){
     if(!youName) return null;
@@ -1492,7 +1497,7 @@
   // ---- inline price edit ----
   function editPrice(id){
     var item = state.listings.find(function(l){ return l.id===id; });
-    if(!item || !db) return;
+    if(!item || !db || !canEdit(item)) return;
     var val = null;
     try { val = window.prompt('Prix total du séjour, en CAD $ (tel qu\'affiché sur Airbnb/Booking) :', item.price!=null ? item.price : ''); } catch(e){}
     if(val===null) return;
@@ -1595,7 +1600,9 @@
           '<div class="card-title"><a href="'+escapeHtml(item.url||'#')+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans titre')+'</a></div>' +
           flightStrip(item) +
           '<div class="trip-chips">' +
-            '<button class="price-edit" data-price-edit="'+item.id+'" title="Cliquer pour saisir/corriger le prix"><b>'+fmtEUR(item.price)+'</b> total ✏️</button>' +
+            (canEdit(item)
+              ? '<button class="price-edit" data-price-edit="'+item.id+'" title="Cliquer pour saisir/corriger le prix"><b>'+fmtEUR(item.price)+'</b> total ✏️</button>'
+              : '<span class="price-edit" style="cursor:default;"><b>'+fmtEUR(item.price)+'</b> total</span>') +
             perPersonChip + perNightChip + dateChip + nightsChip +
           '</div>' +
           badgeRow(item) +
@@ -1617,7 +1624,7 @@
               '<button class="thumb'+(downOn?' down-on':'')+'" data-thumb="down:listing:'+item.id+'">👎 '+vs.down+'</button>' +
               '<button class="thumb" data-comment="listing:'+item.id+'" title="Commenter">💬</button>' +
             '</div>' +
-            '<span class="by">ajouté par '+escapeHtml(item.addedBy||'?')+editedMention(item)+(youName===item.addedBy ? ' · <button class="del" data-del="listing:'+item.id+'">supprimer</button>' : '')+'</span>' +
+            '<span class="by">ajouté par '+escapeHtml(item.addedBy||'?')+editedMention(item)+(canEdit(item) ? ' · <button class="del" data-del="listing:'+item.id+'">supprimer</button>' : '')+'</span>' +
           '</div>' +
         '</div>' +
       '</article>';
@@ -1823,7 +1830,7 @@
               '<button class="thumb'+(downOn?' down-on':'')+'" data-thumb="down:activity:'+item.id+'">👎 '+vs.down+'</button>' +
               '<button class="thumb" data-comment="activity:'+item.id+'" title="Commenter">💬</button>' +
             '</div>' +
-            '<span class="by">ajouté par '+escapeHtml(item.addedBy||'?')+(youName===item.addedBy ? ' · <button class="del" data-del="activity:'+item.id+'">supprimer</button>' : '')+'</span>' +
+            '<span class="by">ajouté par '+escapeHtml(item.addedBy||'?')+(canEdit(item) ? ' · <button class="del" data-del="activity:'+item.id+'">supprimer</button>' : '')+'</span>' +
           '</div>' +
         '</div>' +
       '</article>';
@@ -1940,7 +1947,10 @@
     var delEl = e.target.closest('[data-del]');
     if(delEl){
       var dparts = delEl.dataset.del.split(':');
-      if(db) db.doc(COLLECTION_OF[dparts[0]] + dparts[1])['delete']().catch(function(){});
+      var delSource = dparts[0]==='listing' ? state.listings : state.activities;
+      var delItem = delSource.find(function(x){ return x.id===dparts[1]; });
+      if(!db || !canEdit(delItem)) return;
+      db.doc(COLLECTION_OF[dparts[0]] + dparts[1])['delete']().catch(function(){});
       return;
     }
   });
