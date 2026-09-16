@@ -359,10 +359,7 @@
   }
   .trip-media img{ width:100%; height:100%; object-fit:cover; position:absolute; inset:0; }
   .trip-media svg{ width:28px; height:28px; opacity:.4; }
-  .trip-media .photo-link{
-    font-size:9.5px; font-weight:700; color:var(--teal); text-decoration:none;
-    border:1px solid var(--teal); border-radius:999px; padding:4px 10px; background:var(--paper-raised);
-  }
+  .trip-media .mini-map{ position:absolute; inset:0; width:100%; height:100%; display:block; }
   .trip-main{ flex:1; min-width:0; padding:16px 18px; display:flex; flex-direction:column; gap:10px; }
   .trip-title{ font-size:15px; font-weight:700; line-height:1.3; }
   .trip-title a{ color:var(--ink); text-decoration:none; }
@@ -1017,6 +1014,37 @@
     return lookupPlace(label);
   }
 
+  // Small per-card map thumbnail (replaces the old "no photo" fallback):
+  // reuses the same world geometry as the big destination map, just
+  // zoomed on this one listing's city. Country paths are cached once
+  // since they're identical across every card.
+  var _miniMapCountriesHtml = null;
+  function miniMapCountriesHtml(){
+    if(_miniMapCountriesHtml===null){
+      _miniMapCountriesHtml = MAP_DATA.countries.map(function(c){ return '<path class="map-country" d="'+c.d+'"></path>'; }).join('');
+    }
+    return _miniMapCountriesHtml;
+  }
+  function listingMapThumb(item){
+    var fallbackLabel = destInfo(item.destination || 'autre').label;
+    var xy = (item.location && lookupPlace(item.location)) || pinXY(item.destination || 'autre', fallbackLabel);
+    if(!xy) return null;
+    var scale = 7;
+    var tx = +(MAP_DATA.W/2 - xy.x*scale).toFixed(1);
+    var ty = +(MAP_DATA.H/2 - xy.y*scale).toFixed(1);
+    var cityLabel = (item.location || fallbackLabel).split(',')[0].trim();
+    return '' +
+      '<svg class="mini-map" viewBox="0 0 '+MAP_DATA.W+' '+MAP_DATA.H+'" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Carte de '+escapeHtml(cityLabel)+'">' +
+        '<rect x="0" y="0" width="'+MAP_DATA.W+'" height="'+MAP_DATA.H+'" fill="var(--teal-soft)"></rect>' +
+        '<g transform="translate('+tx+','+ty+') scale('+scale+')">' + miniMapCountriesHtml() + '</g>' +
+        '<g class="map-pin">' +
+          '<path class="pin-shape" d="'+PIN_PATH_D+'" transform="translate('+(MAP_DATA.W/2)+','+(MAP_DATA.H/2)+')"></path>' +
+          '<circle class="pin-hole" cx="'+(MAP_DATA.W/2)+'" cy="'+(MAP_DATA.H/2-20)+'" r="7.5"></circle>' +
+          '<text class="pin-city" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+26)+'" text-anchor="middle">'+escapeHtml(cityLabel)+'</text>' +
+        '</g>' +
+      '</svg>';
+  }
+
   function buildMapMarkers(){
     var mEl = document.getElementById('mapMarkers');
     mEl.innerHTML = pinDefs().map(function(p){
@@ -1510,15 +1538,10 @@
     var vs = voteStats('listing', item.id);
     var mv = youName ? myVote('listing', item.id, youName) : null;
     var upOn = mv && mv.value===1, downOn = mv && mv.value===-1;
-    var images = (item.images||[]).filter(Boolean);
-    var photoFallback =
-      '<div class="photo-fallback" style="'+(images.length?'display:none;':'display:flex;')+'position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg,var(--coral-soft),var(--teal-soft));">' +
+    var photo = listingMapThumb(item) ||
+      '<div class="photo-fallback" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--coral-soft),var(--teal-soft));">' +
         ICON_HOUSE +
-        '<a class="photo-link" href="'+escapeHtml(item.url||'#')+'" target="_blank" rel="noopener">📷 Voir sur Airbnb</a>' +
       '</div>';
-    var photo = (images.length
-      ? '<img src="'+escapeHtml(images[0])+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">'
-      : '') + photoFallback;
     var mapUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.title + ', ' + (item.location||''));
     var dateChip = (item.dateStart && item.dateEnd) ? '<span class="chip">🗓️ '+escapeHtml(fmtDayMonth(item.dateStart))+' - '+escapeHtml(fmtDayMonth(item.dateEnd))+'</span>' : '';
     var nightsChip = '';
