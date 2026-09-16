@@ -1531,7 +1531,8 @@
     if(item.beach) b.push('<span class="feat-badge">🏖️ Plage</span>');
     if(item.pool) b.push('<span class="feat-badge">🏊 Piscine</span>');
     if(item.chef) b.push('<span class="feat-badge">👨‍🍳 Chef inclus</span>');
-    return b.length ? '<div class="feat-badges">'+b.join('')+'</div>' : '';
+    b.push('<span class="feat-badge">👥 '+(item.capacity ? 'max '+item.capacity+' personnes' : 'capacité non précisée')+'</span>');
+    return '<div class="feat-badges">'+b.join('')+'</div>';
   }
 
   function listingCard(item){
@@ -1574,7 +1575,6 @@
           '<div class="trip-chips">' +
             '<button class="price-edit" data-price-edit="'+item.id+'" title="Cliquer pour saisir/corriger le prix"><b>'+fmtEUR(item.price)+'</b> total ✏️</button>' +
             perPersonChip + perNightChip + dateChip + nightsChip +
-            '<span class="chip">'+(item.capacity ? item.capacity+' pers.' : 'capacité ?')+'</span>' +
           '</div>' +
           badgeRow(item) +
           '<button class="trip-expand" data-expand-trip="'+item.id+'" aria-expanded="false">▾ Voir tous les détails</button>' +
