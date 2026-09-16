@@ -884,7 +884,7 @@
   // ---- mandatory identification gate (shown once, on first visit) ----
   (function initNameGate(){
     var gate = document.getElementById('nameGate');
-    if(youName){ return; }
+    if(youName){ document.getElementById('youName').textContent = youName; return; }
     gate.hidden = false;
     var input = document.getElementById('nameGateInput');
     var btn = document.getElementById('nameGateBtn');
