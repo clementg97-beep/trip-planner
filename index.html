@@ -371,9 +371,10 @@
   .trip-media svg{ width:28px; height:28px; opacity:.4; }
   .trip-media .mini-map{ position:absolute; inset:0; width:100%; height:100%; display:block; }
   .trip-main{ flex:1; min-width:0; padding:16px 18px; display:flex; flex-direction:column; gap:10px; }
-  .trip-title{ font-size:15px; font-weight:700; line-height:1.3; }
-  .trip-title a{ color:var(--ink); text-decoration:none; }
-  .trip-title a:hover{ color:var(--coral); }
+  .card-title{ font-size:15px; font-weight:700; line-height:1.3; }
+  .card-title a{ color:var(--ink); text-decoration:none; }
+  .card-title a:hover{ color:var(--coral); }
+  .badge-row{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:6px; }
   .trip-chips{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .chip{
     font-size:10.5px; color:var(--ink-soft); background:var(--paper); border:1px solid var(--line);
@@ -393,7 +394,7 @@
   .trip-detail{ display:flex; flex-direction:column; gap:10px; padding-top:8px; border-top:1px dashed var(--line); }
   @media (max-width:640px){
     .trip-card{ flex-direction:column; }
-    .trip-media{ flex:none; max-width:100%; aspect-ratio:16/9; }
+    .trip-media{ flex:none; max-width:100%; height:110px; aspect-ratio:auto; }
   }
   .dest-badge{
     display:inline-flex; align-items:center; gap:3px; background:var(--paper); color:var(--ink-soft);
@@ -1590,7 +1591,8 @@
       '<article class="trip-card">' +
         '<div class="trip-media">'+photo+'</div>' +
         '<div class="trip-main">' +
-          '<div class="trip-title">'+destBadge(item)+hypeBadge+'<a href="'+escapeHtml(item.url||'#')+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans titre')+'</a></div>' +
+          ((destBadge(item)||hypeBadge) ? '<div class="badge-row">'+destBadge(item)+hypeBadge+'</div>' : '') +
+          '<div class="card-title"><a href="'+escapeHtml(item.url||'#')+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans titre')+'</a></div>' +
           flightStrip(item) +
           '<div class="trip-chips">' +
             '<button class="price-edit" data-price-edit="'+item.id+'" title="Cliquer pour saisir/corriger le prix"><b>'+fmtEUR(item.price)+'</b> total ✏️</button>' +
@@ -1806,7 +1808,8 @@
       '<article class="trip-card activity-card">' +
         '<div class="trip-media" style="flex-basis:140px;max-width:140px;">'+ICON_STAR+'</div>' +
         '<div class="trip-main">' +
-          '<div class="trip-title">'+destBadge(item)+(item.url ? '<a href="'+escapeHtml(item.url)+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans nom')+'</a>' : escapeHtml(item.title||'Sans nom'))+'</div>' +
+          (destBadge(item) ? '<div class="badge-row">'+destBadge(item)+'</div>' : '') +
+          '<div class="card-title">'+(item.url ? '<a href="'+escapeHtml(item.url)+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans nom')+'</a>' : escapeHtml(item.title||'Sans nom'))+'</div>' +
           '<div class="trip-chips">' +
             '<span class="chip">'+escapeHtml(item.location||'destination ?')+'</span>' +
             (item.price ? '<span class="chip"><b>'+fmtEUR(item.price)+'</b> / pers.</span>' : '') +
