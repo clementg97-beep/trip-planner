@@ -143,11 +143,21 @@
     .stats.stats-3 .stat:last-child{ grid-column:1/-1; }
   }
   .best-dates-list{ margin-top:4px; display:flex; flex-direction:column; gap:3px; }
-  .best-dates-row{ display:flex; align-items:baseline; gap:5px; font-size:11px; }
+  .best-dates-row{
+    display:flex; align-items:baseline; gap:5px; font-size:11px; width:100%;
+    background:none; border:none; padding:2px 0; font-family:inherit; cursor:pointer; border-radius:4px;
+  }
+  .best-dates-row:hover{ background:var(--paper); }
+  .best-dates-row.active{ background:var(--coral-soft); }
   .best-dates-row .rank{ color:var(--ink-soft); font-weight:600; font-size:9px; flex:none; }
-  .best-dates-row b{ flex:1; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .best-dates-row b{ flex:1; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:left; }
   .best-dates-row .dur{ color:var(--ink-soft); font-size:9px; flex:none; }
   .best-dates-row .cnt{ color:var(--teal); font-weight:700; font-size:10px; flex:none; }
+  .filter-bar-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .date-filter-chip{ background:var(--coral-soft); color:var(--coral); display:flex; align-items:center; gap:6px; }
+  .date-filter-chip button{
+    background:none; border:none; color:var(--coral); font-weight:700; font-size:12px; padding:0; cursor:pointer; line-height:1;
+  }
   .avail-unsaved{ font-size:10.5px; font-weight:700; color:var(--coral); }
   .avail-launch{
     background:var(--paper-raised); border:1px solid var(--coral); border-radius:14px;
@@ -1223,7 +1233,10 @@
     }
     list.innerHTML = top.map(function(w, i){
       var days = Math.round((dateOfISO(w.end) - dateOfISO(w.start)) / 86400000) + 1;
-      return '<div class="best-dates-row"><span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="dur">'+days+'j</span><span class="cnt">'+w.count+'/'+state.availabilities.length+'</span></div>';
+      var isActive = dateFilterWindow && dateFilterWindow.start===w.start && dateFilterWindow.end===w.end;
+      return '<button type="button" class="best-dates-row'+(isActive?' active':'')+'" data-filter-dates="'+w.start+'|'+w.end+'" title="Cliquer pour filtrer les voyages sur cette période">' +
+        '<span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="dur">'+days+'j</span><span class="cnt">'+w.count+'/'+state.availabilities.length+'</span>' +
+      '</button>';
     }).join('');
   }
 
@@ -1525,6 +1538,12 @@
   // ---- rendering: listings ----
   var HYPE_THRESHOLD = 3;
   var listingFilters = { sort:'score', onlyHyped:false };
+  var dateFilterWindow = null; // { start, end } iso -- set by clicking a "meilleures dates" proposal
+  function listingMatchesDateFilter(l){
+    if(!dateFilterWindow) return true;
+    if(!l.dateStart || !l.dateEnd) return false;
+    return l.dateStart <= dateFilterWindow.end && l.dateEnd >= dateFilterWindow.start;
+  }
 
   function badgeRow(item){
     var b = [];
@@ -1607,7 +1626,13 @@
     var scopedListings = mapOverview ? state.listings.slice() : state.listings.filter(function(l){ return (l.destination||'autre')===activeDestination; });
     var people = tripPeople();
     var tooSmallCount = scopedListings.filter(function(l){ return l.capacity!=null && l.capacity < people; }).length;
-    var destListings = scopedListings.filter(function(l){ return l.capacity==null || l.capacity >= people; });
+    var capListings = scopedListings.filter(function(l){ return l.capacity==null || l.capacity >= people; });
+    var dateFilteredOutCount = dateFilterWindow ? capListings.filter(function(l){ return !listingMatchesDateFilter(l); }).length : 0;
+    var destListings = dateFilterWindow ? capListings.filter(listingMatchesDateFilter) : capListings;
+
+    var dateFilterChip = dateFilterWindow
+      ? '<span class="chip date-filter-chip">📅 '+fmtDayMonth(dateFilterWindow.start)+' → '+fmtDayMonth(dateFilterWindow.end)+' <button type="button" id="clearDateFilterBtn" title="Retirer le filtre">✕</button></span>'
+      : '';
 
     var filterBar = '' +
       '<div class="filter-bar">' +
@@ -1615,15 +1640,23 @@
           '<button class="seg-btn'+(listingFilters.sort==='score'?' active':'')+'" data-sort="score">🔥 Plus hypés</button>' +
           '<button class="seg-btn'+(listingFilters.sort==='recent'?' active':'')+'" data-sort="recent">🆕 Récents</button>' +
         '</div>' +
-        '<label class="hype-toggle"><input type="checkbox" id="onlyHypedToggle"'+(listingFilters.onlyHyped?' checked':'')+'> Seulement les hypés (score ≥ '+HYPE_THRESHOLD+')</label>' +
+        '<div class="filter-bar-right">' +
+          dateFilterChip +
+          '<label class="hype-toggle"><input type="checkbox" id="onlyHypedToggle"'+(listingFilters.onlyHyped?' checked':'')+'> Seulement les hypés (score ≥ '+HYPE_THRESHOLD+')</label>' +
+        '</div>' +
       '</div>' +
-      (tooSmallCount ? '<div class="capacity-note">🙈 '+tooSmallCount+' logement'+(tooSmallCount>1?'s':'')+' masqué'+(tooSmallCount>1?'s':'')+' : capacité insuffisante pour '+people+' voyageurs.</div>' : '');
+      (tooSmallCount ? '<div class="capacity-note">🙈 '+tooSmallCount+' logement'+(tooSmallCount>1?'s':'')+' masqué'+(tooSmallCount>1?'s':'')+' : capacité insuffisante pour '+people+' voyageurs.</div>' : '') +
+      (dateFilteredOutCount ? '<div class="capacity-note">📅 '+dateFilteredOutCount+' logement'+(dateFilteredOutCount>1?'s':'')+' masqué'+(dateFilteredOutCount>1?'s':'')+' : dates non renseignées ou hors de la période sélectionnée.</div>' : '');
 
     if(!destListings.length){
-      grid.innerHTML = tooSmallCount
-        ? '<div class="empty" style="grid-column:1/-1;"><div class="big">🙈</div>Les '+tooSmallCount+' logement'+(tooSmallCount>1?'s':'')+' propos'+(tooSmallCount>1?'és':'é')+' ici n\'ont pas la capacité pour '+people+' voyageurs.<br>Réduisez le nombre de voyageurs en haut ou proposez un logement plus grand.</div>'
-        : '<div class="empty" style="grid-column:1/-1;"><div class="big">🏝️</div>Aucun logement pour cette destination.<br>Collez un lien Airbnb, Booking ou Voyage Privé pour lancer la comparaison.</div>';
-      document.getElementById('listingFilterSlot').innerHTML = '';
+      grid.innerHTML = dateFilterWindow
+        ? '<div class="empty" style="grid-column:1/-1;"><div class="big">📅</div>Aucun logement avec des dates correspondant à la période sélectionnée.<br>Retire le filtre pour revoir tous les voyages proposés.</div>'
+        : (tooSmallCount
+          ? '<div class="empty" style="grid-column:1/-1;"><div class="big">🙈</div>Les '+tooSmallCount+' logement'+(tooSmallCount>1?'s':'')+' propos'+(tooSmallCount>1?'és':'é')+' ici n\'ont pas la capacité pour '+people+' voyageurs.<br>Réduisez le nombre de voyageurs en haut ou proposez un logement plus grand.</div>'
+          : '<div class="empty" style="grid-column:1/-1;"><div class="big">🏝️</div>Aucun logement pour cette destination.<br>Collez un lien Airbnb, Booking ou Voyage Privé pour lancer la comparaison.</div>');
+      document.getElementById('listingFilterSlot').innerHTML = dateFilterWindow ? filterBar : '';
+      var clearBtnEmpty = document.getElementById('clearDateFilterBtn');
+      if(clearBtnEmpty) clearBtnEmpty.addEventListener('click', function(){ dateFilterWindow = null; renderListings(); renderBestDates(); });
     } else {
       var list = destListings.slice();
       if(listingFilters.onlyHyped){
@@ -1641,6 +1674,8 @@
       });
       var toggle = document.getElementById('onlyHypedToggle');
       if(toggle) toggle.addEventListener('change', function(){ listingFilters.onlyHyped = toggle.checked; renderListings(); });
+      var clearBtn = document.getElementById('clearDateFilterBtn');
+      if(clearBtn) clearBtn.addEventListener('click', function(){ dateFilterWindow = null; renderListings(); renderBestDates(); });
     }
   }
 
@@ -1844,6 +1879,16 @@
 
   // ---- delegated click handling ----
   document.addEventListener('click', function(e){
+    var dateFilterEl = e.target.closest('[data-filter-dates]');
+    if(dateFilterEl){
+      var dfParts = dateFilterEl.dataset.filterDates.split('|');
+      var newWindow = { start: dfParts[0], end: dfParts[1] };
+      var isSame = dateFilterWindow && dateFilterWindow.start===newWindow.start && dateFilterWindow.end===newWindow.end;
+      dateFilterWindow = isSame ? null : newWindow;
+      renderListings();
+      renderBestDates();
+      return;
+    }
     var voteEl = e.target.closest('[data-vote]');
     if(voteEl){
       var parts = voteEl.dataset.vote.split(':');
