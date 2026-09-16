@@ -161,6 +161,7 @@
   .avail-day{
     position:relative; aspect-ratio:1; border:none; background:var(--paper); border-radius:7px;
     font-size:10.5px; font-weight:600; color:var(--ink); cursor:pointer;
+    user-select:none; -webkit-user-select:none; touch-action:none;
   }
   .avail-day:disabled{ visibility:hidden; }
   .avail-day.out-of-range{ opacity:.3; cursor:not-allowed; }
@@ -603,7 +604,7 @@
   <div id="availabilityView" hidden>
     <div class="avail-intro">
       <h2>📅 Avant toute chose : tes disponibilités</h2>
-      <p>Clique les jours où tu es libre pour ce voyage. Une fois que tout le monde a répondu, la page des voyages proposés s'ouvrira.</p>
+      <p>Clique un jour pour le sélectionner, ou clique-glisse (glisse le doigt sur mobile) pour sélectionner toute une plage d'un coup. Une fois que tout le monde a répondu, la page des voyages proposés s'ouvrira.</p>
       <div class="avail-progress" id="availProgress"></div>
     </div>
     <div class="avail-calendar" id="availCalendar"></div>
@@ -1149,15 +1150,56 @@
         DOW.map(function(l){ return '<div class="avail-dow">'+l+'</div>'; }).join('') + cells +
       '</div></div>';
     }).join('');
+    bindAvailDragGlobal();
     document.querySelectorAll('.avail-day[data-iso]').forEach(function(btn){
-      btn.addEventListener('click', function(){
+      function applyDrag(selected){
         var iso = btn.dataset.iso;
-        if(mySelectedDates.has(iso)){ mySelectedDates.delete(iso); btn.classList.remove('selected'); }
-        else { mySelectedDates.add(iso); btn.classList.add('selected'); }
+        if(selected){ mySelectedDates.add(iso); btn.classList.add('selected'); }
+        else { mySelectedDates.delete(iso); btn.classList.remove('selected'); }
         updateAvailSelectedCount();
+      }
+      btn.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        availDragState = { value: !mySelectedDates.has(btn.dataset.iso) };
+        applyDrag(availDragState.value);
       });
+      btn.addEventListener('mouseenter', function(){
+        if(!availDragState) return;
+        applyDrag(availDragState.value);
+      });
+      btn.addEventListener('touchstart', function(e){
+        e.preventDefault();
+        availDragState = { value: !mySelectedDates.has(btn.dataset.iso) };
+        applyDrag(availDragState.value);
+      }, { passive:false });
     });
     updateAvailSelectedCount();
+  }
+  // Click-and-drag (or touch-drag) range selection: mousedown/touchstart on
+  // a day flips it and starts a drag whose value (select vs deselect) is
+  // carried over every other day the pointer passes through, so picking a
+  // whole week is one gesture instead of N taps. Bound once globally
+  // (buildAvailCalendar rebuilds the day buttons on every snapshot).
+  var availDragState = null;
+  var availDragBound = false;
+  function bindAvailDragGlobal(){
+    if(availDragBound) return;
+    availDragBound = true;
+    document.addEventListener('mouseup', function(){ availDragState = null; });
+    document.addEventListener('touchend', function(){ availDragState = null; });
+    document.addEventListener('touchcancel', function(){ availDragState = null; });
+    document.addEventListener('touchmove', function(e){
+      if(!availDragState) return;
+      e.preventDefault();
+      var t = e.touches[0];
+      var el = document.elementFromPoint(t.clientX, t.clientY);
+      var cellBtn = el && el.closest ? el.closest('.avail-day[data-iso]') : null;
+      if(!cellBtn) return;
+      var iso = cellBtn.dataset.iso;
+      if(availDragState.value){ mySelectedDates.add(iso); cellBtn.classList.add('selected'); }
+      else { mySelectedDates.delete(iso); cellBtn.classList.remove('selected'); }
+      updateAvailSelectedCount();
+    }, { passive:false });
   }
   function updateAvailSelectedCount(){
     var el = document.getElementById('availSelectedCount');
