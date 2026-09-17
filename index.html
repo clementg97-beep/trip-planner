@@ -1043,16 +1043,40 @@
   // a real Google Maps embed for genuine address-level precision, instead
   // of our hand-approximated destination coordinates. No API key needed
   // -- the "output=embed" query form is a plain public iframe endpoint.
-  function listingMapEmbedUrl(item){
-    var query = (item.location && item.location.trim()) || destInfo(item.destination || 'autre').label;
-    if(!query) return null;
-    return 'https://www.google.com/maps?q=' + encodeURIComponent(query) + '&output=embed';
+  // Small per-card map thumbnail. A Google Maps iframe was tried here for
+  // real geocoded precision, but Google blocks embedding inside this
+  // sandboxed Artifact context ("Ce contenu est bloque"), so this stays
+  // on the self-contained SVG approach: same world geometry as the big
+  // destination map, zoomed on this one listing's city. Country paths
+  // are cached once since they're identical across every card.
+  var _miniMapCountriesHtml = null;
+  function miniMapCountriesHtml(){
+    if(_miniMapCountriesHtml===null){
+      _miniMapCountriesHtml = MAP_DATA.countries.map(function(c){ return '<path class="map-country" d="'+c.d+'"></path>'; }).join('');
+    }
+    return _miniMapCountriesHtml;
   }
   function listingMapThumb(item){
-    var url = listingMapEmbedUrl(item);
-    if(!url) return null;
-    var label = (item.location && item.location.trim()) || destInfo(item.destination || 'autre').label;
-    return '<iframe class="mini-map" src="'+url+'" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de '+escapeHtml(label)+'"></iframe>';
+    var fallbackLabel = destInfo(item.destination || 'autre').label;
+    var xy = (item.location && lookupPlace(item.location)) || pinXY(item.destination || 'autre', fallbackLabel);
+    if(!xy) return null;
+    var scale = 7;
+    var tx = +(MAP_DATA.W/2 - xy.x*scale).toFixed(1);
+    var ty = +(MAP_DATA.H/2 - xy.y*scale).toFixed(1);
+    var labelParts = (item.location || fallbackLabel).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    var cityLabel = labelParts[0];
+    var countryLabel = labelParts[1] || (fallbackLabel.split(',')[1] || '').trim();
+    return '' +
+      '<svg class="mini-map" viewBox="0 0 '+MAP_DATA.W+' '+MAP_DATA.H+'" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Carte de '+escapeHtml(cityLabel)+'">' +
+        '<rect x="0" y="0" width="'+MAP_DATA.W+'" height="'+MAP_DATA.H+'" fill="var(--teal-soft)"></rect>' +
+        '<g transform="translate('+tx+','+ty+') scale('+scale+')">' + miniMapCountriesHtml() + '</g>' +
+        '<g class="map-pin">' +
+          '<path class="pin-shape" d="'+PIN_PATH_D+'" transform="translate('+(MAP_DATA.W/2)+','+(MAP_DATA.H/2)+')"></path>' +
+          '<circle class="pin-hole" cx="'+(MAP_DATA.W/2)+'" cy="'+(MAP_DATA.H/2-20)+'" r="7.5"></circle>' +
+          '<text class="pin-city" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+26)+'" text-anchor="middle">'+escapeHtml(cityLabel)+'</text>' +
+          (countryLabel ? '<text class="pin-country" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+46)+'" text-anchor="middle">'+escapeHtml(countryLabel)+'</text>' : '') +
+        '</g>' +
+      '</svg>';
   }
 
   function buildMapMarkers(){
