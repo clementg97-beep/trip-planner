@@ -1056,7 +1056,39 @@
     }
     return _miniMapCountriesHtml;
   }
-  function listingMapThumb(item){
+  // Looks up real [lon,lat] for a place (mirrors lookupPlace, which uses
+  // approximate map-pixel coords instead) against the embedded lat/lon
+  // table, for services that need genuine geographic coordinates.
+  function lookupPlaceLL(label){
+    var key = normPlaceName(label);
+    if(MAP_DATA.placeLL[key]) return MAP_DATA.placeLL[key];
+    var found = Object.keys(MAP_DATA.placeLL).find(function(k){ return key.indexOf(k)!==-1 || k.indexOf(key)!==-1; });
+    return found ? MAP_DATA.placeLL[found] : null;
+  }
+  function listingLatLon(item){
+    return (item.location && lookupPlaceLL(item.location)) ||
+      lookupPlaceLL(item.destination || 'autre') ||
+      lookupPlaceLL(destInfo(item.destination || 'autre').label);
+  }
+
+  // OpenStreetMap's own embed endpoint -- free, no API key, and (unlike
+  // Google's embed) explicitly meant to be framed on third-party pages,
+  // so it survives the Artifact sandbox where Google's iframe got blocked.
+  function listingOsmEmbed(item){
+    var ll = listingLatLon(item);
+    if(!ll) return null;
+    var lon = ll[0], lat = ll[1];
+    var d = 0.06;
+    var bbox = (lon-d)+','+(lat-d)+','+(lon+d)+','+(lat+d);
+    var label = (item.location && item.location.trim()) || destInfo(item.destination || 'autre').label;
+    return '<iframe class="mini-map" src="https://www.openstreetmap.org/export/embed.html?bbox='+bbox+'&layer=mapnik&marker='+lat+','+lon+
+      '" loading="lazy" title="Carte de '+escapeHtml(label)+'"></iframe>';
+  }
+
+  // Self-contained SVG fallback (same world geometry as the big
+  // destination map) if OSM's embed is ever unreachable or the place
+  // has no known lat/lon.
+  function listingSvgMapThumb(item){
     var fallbackLabel = destInfo(item.destination || 'autre').label;
     var xy = (item.location && lookupPlace(item.location)) || pinXY(item.destination || 'autre', fallbackLabel);
     if(!xy) return null;
@@ -1077,6 +1109,9 @@
           (countryLabel ? '<text class="pin-country" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+46)+'" text-anchor="middle">'+escapeHtml(countryLabel)+'</text>' : '') +
         '</g>' +
       '</svg>';
+  }
+  function listingMapThumb(item){
+    return listingOsmEmbed(item) || listingSvgMapThumb(item);
   }
 
   function buildMapMarkers(){
