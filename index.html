@@ -359,6 +359,15 @@
 
   /* ---- trip cards (vol + logement fusionnés, format paysage) ---- */
   .trip-list{ display:flex; flex-direction:column; gap:18px; }
+  .trip-list.mosaic{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  .trip-list.mosaic .trip-card{ flex-direction:column; }
+  .trip-list.mosaic .trip-media{ flex:none; max-width:100%; height:120px; }
+  .trip-list.mosaic .trip-main{ padding:12px 14px; gap:8px; }
+  .trip-list.mosaic .flight-strip{ display:none; }
+  .trip-list.mosaic .by{ display:none; }
+  .trip-list.mosaic .comments{ display:none; }
+  .trip-list.mosaic .comment-box{ display:none; }
+  .trip-list.mosaic [data-comment]{ display:none; }
   .trip-card{
     display:flex; flex-direction:row; background:var(--paper-raised); border:1px solid var(--line);
     border-radius:16px; overflow:hidden; box-shadow:var(--shadow);
@@ -608,6 +617,10 @@
       <div class="dest-block-head">
         <h2 class="dest-block-title">✈️🏠 Vol &amp; Logement</h2>
         <div class="dest-block-actions">
+          <div class="seg" id="viewModeToggle">
+            <button class="seg-btn active" type="button" data-view="normal" title="Vue normale">▦ Normale</button>
+            <button class="seg-btn" type="button" data-view="mosaic" title="Vue mosaïque, plus compacte">⊞ Mosaïque</button>
+          </div>
           <button class="add-tile add-tile-inline" id="addTripBtn" type="button"><span class="plus">🧳</span>Ajouter un voyage</button>
         </div>
       </div>
@@ -1545,6 +1558,7 @@
   // ---- rendering: listings ----
   var HYPE_THRESHOLD = 3;
   var listingFilters = { sort:'score', onlyHyped:false };
+  var listingViewMode = 'normal'; // 'normal' | 'mosaic'
   var dateFilterWindow = null; // { start, end } iso -- set by clicking a "meilleures dates" proposal
   function listingMatchesDateFilter(l){
     if(!dateFilterWindow) return true;
@@ -1632,6 +1646,7 @@
 
   function renderListings(){
     var grid = document.getElementById('listingGrid');
+    grid.classList.toggle('mosaic', listingViewMode==='mosaic');
     document.getElementById('statListingCount').textContent = state.listings.length;
     var scopedListings = mapOverview ? state.listings.slice() : state.listings.filter(function(l){ return (l.destination||'autre')===activeDestination; });
     var people = tripPeople();
@@ -1970,6 +1985,13 @@
       showTripForm(activeDestination, mapOverview);
     });
     document.getElementById('addActivityBtn').addEventListener('click', function(){ showActivityForm(); });
+    document.querySelectorAll('#viewModeToggle .seg-btn').forEach(function(b){
+      b.addEventListener('click', function(){
+        listingViewMode = b.dataset.view;
+        document.querySelectorAll('#viewModeToggle .seg-btn').forEach(function(x){ x.classList.toggle('active', x===b); });
+        renderListings();
+      });
+    });
     try {
       db = await claude.use('db');
     } catch(e){ db = null; }
