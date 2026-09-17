@@ -1057,7 +1057,9 @@
     var scale = 7;
     var tx = +(MAP_DATA.W/2 - xy.x*scale).toFixed(1);
     var ty = +(MAP_DATA.H/2 - xy.y*scale).toFixed(1);
-    var cityLabel = (item.location || fallbackLabel).split(',')[0].trim();
+    var labelParts = (item.location || fallbackLabel).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    var cityLabel = labelParts[0];
+    var countryLabel = labelParts[1] || (fallbackLabel.split(',')[1] || '').trim();
     return '' +
       '<svg class="mini-map" viewBox="0 0 '+MAP_DATA.W+' '+MAP_DATA.H+'" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Carte de '+escapeHtml(cityLabel)+'">' +
         '<rect x="0" y="0" width="'+MAP_DATA.W+'" height="'+MAP_DATA.H+'" fill="var(--teal-soft)"></rect>' +
@@ -1066,6 +1068,7 @@
           '<path class="pin-shape" d="'+PIN_PATH_D+'" transform="translate('+(MAP_DATA.W/2)+','+(MAP_DATA.H/2)+')"></path>' +
           '<circle class="pin-hole" cx="'+(MAP_DATA.W/2)+'" cy="'+(MAP_DATA.H/2-20)+'" r="7.5"></circle>' +
           '<text class="pin-city" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+26)+'" text-anchor="middle">'+escapeHtml(cityLabel)+'</text>' +
+          (countryLabel ? '<text class="pin-country" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+46)+'" text-anchor="middle">'+escapeHtml(countryLabel)+'</text>' : '') +
         '</g>' +
       '</svg>';
   }
