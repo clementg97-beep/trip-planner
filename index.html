@@ -366,7 +366,9 @@
   .trip-list.mosaic .card-title{ font-size:12.5px; }
   .trip-detail .flight-strip{ display:none; }
   .trip-list.mosaic .trip-main > .flight-strip{ display:none; }
-  .trip-list.mosaic .trip-detail .flight-strip{ display:flex; }
+  .trip-list.mosaic .trip-detail .flight-strip{ display:flex; align-items:flex-start; height:auto; }
+  .trip-detail .flight-strip .fs-route,
+  .trip-detail .flight-strip .fs-sub{ white-space:normal; overflow:visible; text-overflow:clip; }
   .trip-list.mosaic .by{ display:none; }
   .trip-list.mosaic .comments{ display:none; }
   .trip-list.mosaic .comment-box{ display:none; }
@@ -1595,7 +1597,8 @@
         ICON_PLANE +
         '<span class="fs-main">' +
           '<span class="fs-route">'+escapeHtml(f.route||'Vol ?')+(f.airline?' · '+escapeHtml(f.airline):'')+'</span>' +
-          '<span class="fs-sub">'+(dates?escapeHtml(dates):'dates à confirmer')+(f.price?' · '+fmtEUR(f.price)+'/pers':'')+'</span>' +
+          '<span class="fs-sub">'+(dates?escapeHtml(dates):'dates à confirmer')+'</span>' +
+          (f.price ? '<span class="fs-sub">'+fmtEUR(f.price)+'/pers</span>' : '') +
         '</span>' +
       '</a>';
   }
