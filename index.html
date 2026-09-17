@@ -359,15 +359,21 @@
 
   /* ---- trip cards (vol + logement fusionnés, format paysage) ---- */
   .trip-list{ display:flex; flex-direction:column; gap:18px; }
-  .trip-list.mosaic{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  .trip-list.mosaic{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
   .trip-list.mosaic .trip-card{ flex-direction:column; }
-  .trip-list.mosaic .trip-media{ flex:none; max-width:100%; height:120px; }
-  .trip-list.mosaic .trip-main{ padding:12px 14px; gap:8px; }
+  .trip-list.mosaic .trip-media{ display:none; }
+  .trip-list.mosaic .trip-main{ padding:10px 12px; gap:6px; }
+  .trip-list.mosaic .card-title{ font-size:12.5px; }
   .trip-list.mosaic .flight-strip{ display:none; }
   .trip-list.mosaic .by{ display:none; }
   .trip-list.mosaic .comments{ display:none; }
   .trip-list.mosaic .comment-box{ display:none; }
   .trip-list.mosaic [data-comment]{ display:none; }
+  .trip-list.mosaic .feat-badges{ display:none; }
+  .trip-list.mosaic .trip-main > .trip-chips .chip:not(:first-child){ display:none; }
+  @media (max-width:480px){
+    .trip-list.mosaic{ grid-template-columns:repeat(2,1fr); gap:8px; }
+  }
   .trip-card{
     display:flex; flex-direction:row; background:var(--paper-raised); border:1px solid var(--line);
     border-radius:16px; overflow:hidden; box-shadow:var(--shadow);
