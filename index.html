@@ -364,7 +364,9 @@
   .trip-list.mosaic .trip-media{ display:none; }
   .trip-list.mosaic .trip-main{ padding:10px 12px; gap:6px; }
   .trip-list.mosaic .card-title{ font-size:12.5px; }
-  .trip-list.mosaic .flight-strip{ display:none; }
+  .trip-detail .flight-strip{ display:none; }
+  .trip-list.mosaic .trip-main > .flight-strip{ display:none; }
+  .trip-list.mosaic .trip-detail .flight-strip{ display:flex; }
   .trip-list.mosaic .by{ display:none; }
   .trip-list.mosaic .comments{ display:none; }
   .trip-list.mosaic .comment-box{ display:none; }
@@ -1672,6 +1674,7 @@
           badgeRow(item) +
           '<button class="trip-expand" data-expand-trip="'+item.id+'" aria-expanded="false">▾ Voir tous les détails</button>' +
           '<div class="trip-detail" id="detail-'+item.id+'" hidden>' +
+            flightStrip(item) +
             '<div class="trip-chips">' +
               '<a href="'+mapUrl+'" target="_blank" rel="noopener" class="chip map-link">'+escapeHtml(item.location||'Lieu ?')+' 📍</a>' +
               roomsChip + ratingChip + flightDurationChip + drivingTimeChip +
