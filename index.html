@@ -920,6 +920,7 @@
       youName = 'Anonyme';
     }
     document.getElementById('youName').textContent = youName;
+    renderAll();
     return Promise.resolve(youName);
   }
 
@@ -963,6 +964,7 @@
       try { localStorage.setItem(NAME_KEY, youName); } catch(e){}
       document.getElementById('youName').textContent = youName;
       gate.hidden = true;
+      renderAll();
     }
     btn.addEventListener('click', submit);
     input.addEventListener('keydown', function(e){ if(e.key==='Enter') submit(); });
@@ -1001,7 +1003,7 @@
   function createDestinationDoc(label, emoji, name){
     var key = uid();
     var data = { label: label.trim(), emoji: (emoji||'📍').trim().slice(0,4) || '📍', addedBy: name, createdAt: Date.now() };
-    if(db) db.collection('destinations').doc(key).set(data).catch(function(){});
+    if(db) db.doc('destinations/' + key).set(data).catch(function(){});
     var local = { key:key, id:key, label:data.label, emoji:data.emoji };
     state.customDestinations.push(local);
     return key;
@@ -2082,6 +2084,7 @@
     db.collection('flights').onSnapshot(function(snap){
       state.flights = toArrayWithIds(snap);
       renderFlights();
+      renderListings();
     }, logDbError('flights'));
 
     db.collection('destinations').onSnapshot(function(snap){
@@ -2090,6 +2093,8 @@
         return d;
       });
       renderDestTabs();
+      renderListings();
+      renderActivities();
     }, logDbError('destinations'));
 
     db.collection('activities').onSnapshot(function(snap){
