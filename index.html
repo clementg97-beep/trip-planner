@@ -1229,7 +1229,10 @@
     };
   }
   function currentPhase(){
-    return (state.trip && state.trip.phase) || 'trips';
+    // A brand-new trip (no trip/info doc yet, or no phase field on it)
+    // starts on the availability calendar -- friends fill in their dates
+    // first, and only the organizer can move things to the trips page.
+    return (state.trip && state.trip.phase) || 'availability';
   }
   // Self-reported name match, not real auth -- good enough to stop friends
   // from casually opening the trips page before the organizer is ready.
