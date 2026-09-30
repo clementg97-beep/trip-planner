@@ -1639,6 +1639,15 @@
     return fl[0];
   }
 
+  // Same figure as the gold "total per person" badge on each card --
+  // shared here so the price sort uses exactly that number, not a
+  // re-derived approximation.
+  function totalPerPersonFor(item){
+    var perPerson = pricePerPerson(item.price);
+    var flight = flightForDest(item.destination || 'autre');
+    return (perPerson!=null && flight && flight.price!=null) ? perPerson + flight.price : null;
+  }
+
   function flightStrip(item){
     var f = flightForDest(item.destination || 'autre');
     if(!f) return '';
@@ -1707,7 +1716,7 @@
     var flightDurationChip = (flight && flight.duration) ? '<span class="chip">✈️ '+escapeHtml(flight.duration)+'</span>' : '';
     var drivingTimeChip = (flight && flight.drivingTime) ? '<span class="chip">🚗 '+escapeHtml(flight.drivingTime)+'</span>' : '';
     var hypeBadge = vs.score >= HYPE_THRESHOLD ? '<span class="hype-badge">🔥 Hypé</span>' : '';
-    var totalPerPerson = (perPersonVal!=null && flight && flight.price!=null) ? perPersonVal + flight.price : null;
+    var totalPerPerson = totalPerPersonFor(item);
     var totalChip = totalPerPerson!=null
       ? '<span class="total-per-person" title="Logement + vol, par personne">✈️🏠 '+fmtEUR(totalPerPerson)+' / pers.</span>' : '';
     var commentsHtml = renderComments('listing', vs);
@@ -1771,6 +1780,7 @@
         '<div class="seg">' +
           '<button class="seg-btn'+(listingFilters.sort==='score'?' active':'')+'" data-sort="score">🔥 Plus hypés</button>' +
           '<button class="seg-btn'+(listingFilters.sort==='recent'?' active':'')+'" data-sort="recent">🆕 Récents</button>' +
+          '<button class="seg-btn'+(listingFilters.sort==='price'?' active':'')+'" data-sort="price" title="Total vol + logement par personne, du moins cher au plus cher">🐀 Moins cher</button>' +
         '</div>' +
         '<div class="filter-bar-right">' +
           dateFilterChip +
@@ -1796,6 +1806,13 @@
       }
       list.sort(function(a,b){
         if(listingFilters.sort==='recent') return (b.createdAt||0) - (a.createdAt||0);
+        if(listingFilters.sort==='price'){
+          var pa = totalPerPersonFor(a), pb = totalPerPersonFor(b);
+          if(pa==null && pb==null) return 0;
+          if(pa==null) return 1; // no price yet -- push to the end, not the "cheapest"
+          if(pb==null) return -1;
+          return pa - pb;
+        }
         return voteStats('listing',b.id).score - voteStats('listing',a.id).score;
       });
       document.getElementById('listingFilterSlot').innerHTML = filterBar;
