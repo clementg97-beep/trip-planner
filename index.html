@@ -165,6 +165,13 @@
     display:flex; flex-direction:column; gap:8px; align-items:flex-start;
   }
   .avail-launch p{ margin:0; font-size:10.5px; color:var(--ink-soft); }
+  .avail-locked{
+    background:var(--paper-raised); border:1px dashed var(--line); border-radius:14px;
+    padding:16px 18px; margin-bottom:24px; box-shadow:var(--shadow);
+    display:flex; align-items:center; gap:12px;
+  }
+  .avail-locked-emoji{ font-size:22px; flex:none; }
+  .avail-locked p{ margin:0; font-size:11.5px; color:var(--ink-soft); }
   .admin-bar{ display:flex; justify-content:flex-end; margin-bottom:10px; }
   .admin-bar button{
     background:none; border:1px dashed var(--line); color:var(--ink-soft); border-radius:999px;
@@ -429,6 +436,10 @@
   .comments{ display:flex; flex-direction:column; gap:5px; }
   .comment{ font-size:10.5px; color:var(--ink-soft); line-height:1.4; }
   .comment b{ color:var(--ink); font-weight:600; }
+  .comment-action{
+    background:none; border:none; color:var(--ink-soft); font-size:9.5px; text-decoration:underline;
+    padding:0; font-family:inherit; cursor:pointer;
+  }
 
   .filter-bar{
     display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
@@ -666,6 +677,10 @@
     <div class="avail-launch" id="availLaunchBox" hidden>
       <button class="btn-primary" id="launchTripsBtn">🚀 Ouvrir la page voyages pour tout le monde</button>
       <p>Visible seulement par toi. Une fois cliqué, tout le monde verra directement la page des voyages proposés.</p>
+    </div>
+    <div class="avail-locked" id="availLockedBox" hidden>
+      <span class="avail-locked-emoji">🔒</span>
+      <p>En attente que <b>Clément</b> ouvre la page des voyages proposés pour tout le monde.</p>
     </div>
   </div>
 
@@ -1440,6 +1455,8 @@
       toggleBtn.disabled = !isOrganizer();
       var launchBox = document.getElementById('availLaunchBox');
       if(launchBox) launchBox.hidden = !isOrganizer();
+      var lockedBox = document.getElementById('availLockedBox');
+      if(lockedBox) lockedBox.hidden = isOrganizer();
     } else {
       tripsView.hidden = false;
       availView.hidden = true;
@@ -1562,6 +1579,29 @@
       db.doc('votes/' + vid).set({ itemType:type, itemId:id, voter:name, value:(existing ? existing.value : 0), comment:text.trim() }).catch(function(){});
     });
   }
+  // Clears just the comment text; if that voter had no up/down vote either,
+  // the whole (now-empty) vote doc is removed instead of left as a shell.
+  function deleteComment(type, id, voter){
+    if(!db) return;
+    var v = state.votes.find(function(x){ return x.itemType===type && x.itemId===id && x.voter===voter; });
+    if(!v) return;
+    var vid = voteId(type, id, voter);
+    if(v.value){
+      db.doc('votes/' + vid).update({ comment: '' }).catch(function(){});
+    } else {
+      db.doc('votes/' + vid)['delete']().catch(function(){});
+    }
+  }
+  function renderComments(type, vs){
+    if(!vs.comments.length) return '';
+    return '<div class="comments">' + vs.comments.map(function(c){
+      var mine = youName===c.voter || isOrganizer();
+      var actions = mine
+        ? ' <button type="button" class="comment-action" data-comment="'+type+':'+c.itemId+'">modifier</button> · <button type="button" class="comment-action" data-comment-del="'+type+':'+c.itemId+':'+c.voter+'">supprimer</button>'
+        : '';
+      return '<div class="comment"><b>'+escapeHtml(c.voter)+'</b> '+(c.value===1?'👍':c.value===-1?'👎':'')+' — '+escapeHtml(c.comment)+actions+'</div>';
+    }).join('') + '</div>';
+  }
 
   // ---- inline price edit ----
   function editPrice(id){
@@ -1657,11 +1697,7 @@
     var flightDurationChip = (flight && flight.duration) ? '<span class="chip">✈️ '+escapeHtml(flight.duration)+'</span>' : '';
     var drivingTimeChip = (flight && flight.drivingTime) ? '<span class="chip">🚗 '+escapeHtml(flight.drivingTime)+'</span>' : '';
     var hypeBadge = vs.score >= HYPE_THRESHOLD ? '<span class="hype-badge">🔥 Hypé</span>' : '';
-    var commentsHtml = vs.comments.length ? (
-      '<div class="comments">' + vs.comments.map(function(c){
-        return '<div class="comment"><b>'+escapeHtml(c.voter)+'</b> '+(c.value===1?'👍':c.value===-1?'👎':'')+' — '+escapeHtml(c.comment)+'</div>';
-      }).join('') + '</div>'
-    ) : '';
+    var commentsHtml = renderComments('listing', vs);
 
     return '' +
       '<article class="trip-card">' +
@@ -1879,11 +1915,7 @@
     var vs = voteStats('activity', item.id);
     var mv = youName ? myVote('activity', item.id, youName) : null;
     var upOn = mv && mv.value===1, downOn = mv && mv.value===-1;
-    var commentsHtml = vs.comments.length ? (
-      '<div class="comments">' + vs.comments.map(function(c){
-        return '<div class="comment"><b>'+escapeHtml(c.voter)+'</b> '+(c.value===1?'👍':c.value===-1?'👎':'')+' — '+escapeHtml(c.comment)+'</div>';
-      }).join('') + '</div>'
-    ) : '';
+    var commentsHtml = renderComments('activity', vs);
     return '' +
       '<article class="trip-card activity-card">' +
         '<div class="trip-media" style="flex-basis:140px;max-width:140px;">'+ICON_STAR+'</div>' +
@@ -1963,6 +1995,12 @@
 
   // ---- delegated click handling ----
   document.addEventListener('click', function(e){
+    var commentDelEl = e.target.closest('[data-comment-del]');
+    if(commentDelEl){
+      var cdParts = commentDelEl.dataset.commentDel.split(':');
+      deleteComment(cdParts[0], cdParts[1], cdParts.slice(2).join(':'));
+      return;
+    }
     var dateFilterEl = e.target.closest('[data-filter-dates]');
     if(dateFilterEl){
       var dfParts = dateFilterEl.dataset.filterDates.split('|');
