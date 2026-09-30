@@ -2178,7 +2178,7 @@
     getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
   import {
-    getFirestore, doc, collection, setDoc, updateDoc, deleteDoc, onSnapshot
+    getFirestore, doc, collection, setDoc, deleteDoc, onSnapshot
   } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
   var firebaseConfig = {
@@ -2205,7 +2205,13 @@
       var ref = doc(firestoreDb, path);
       return {
         set: function(data){ return setDoc(ref, data); },
-        update: function(patch){ return updateDoc(ref, patch); },
+        // Firestore's real updateDoc() rejects if the document doesn't
+        // exist yet; the old Claude "db" capability's update() was more
+        // forgiving, and this app calls .update() on trip/info (and a few
+        // vote docs) before ever confirming that doc was created. A merge
+        // set behaves like update() when the doc exists, and like a create
+        // when it doesn't, so nothing here needs its call sites changed.
+        update: function(patch){ return setDoc(ref, patch, { merge: true }); },
         'delete': function(){ return deleteDoc(ref); },
         onSnapshot: function(cb, errCb){
           return onSnapshot(ref, function(snap){ cb(wrapDocSnap(snap)); }, errCb);
