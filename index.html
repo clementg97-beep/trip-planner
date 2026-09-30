@@ -2330,6 +2330,18 @@
       navigator.serviceWorker.register('sw.js').catch(function(){});
     });
   }
+
+  // iOS PWA quirk: env(safe-area-inset-top/bottom) can read 0 on the very
+  // first layout pass right after a standalone launch (header hidden under
+  // the notch/status bar), then correct itself after any reflow. Nudge one
+  // immediately so the fix takes effect on first paint, not just after the
+  // person scrolls.
+  window.addEventListener('load', function(){
+    requestAnimationFrame(function(){
+      window.scrollTo(0, 1);
+      requestAnimationFrame(function(){ window.scrollTo(0, 0); });
+    });
+  });
 </script>
 
 </body></html>
