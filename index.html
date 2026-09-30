@@ -381,6 +381,7 @@
   .trip-list.mosaic .comment-box{ display:none; }
   .trip-list.mosaic [data-comment]{ display:none; }
   .trip-list.mosaic .feat-badges{ display:none; }
+  .trip-list.mosaic .activity-notes{ display:none; }
   .trip-list.mosaic .trip-main > .trip-chips .chip:not(:first-child){ display:none; }
   @media (max-width:480px){
     .trip-list.mosaic{ grid-template-columns:repeat(2,1fr); gap:8px; }
@@ -654,7 +655,13 @@
     <div class="dest-block">
       <div class="dest-block-head">
         <h2 class="dest-block-title">🌴 Activités</h2>
-        <button class="add-tile add-tile-inline" id="addActivityBtn" type="button"><span class="plus">+</span>Ajouter une activité</button>
+        <div class="dest-block-actions">
+          <div class="seg" id="activityViewModeToggle">
+            <button class="seg-btn active" type="button" data-view="normal" title="Vue normale">▦ Normale</button>
+            <button class="seg-btn" type="button" data-view="mosaic" title="Vue mosaïque, plus compacte">⊞ Mosaïque</button>
+          </div>
+          <button class="add-tile add-tile-inline" id="addActivityBtn" type="button"><span class="plus">+</span>Ajouter une activité</button>
+        </div>
       </div>
       <div id="activityAddSlot"></div>
       <div class="trip-list" id="activityGrid"></div>
@@ -1656,6 +1663,7 @@
   var HYPE_THRESHOLD = 3;
   var listingFilters = { sort:'score', onlyHyped:false };
   var listingViewMode = 'normal'; // 'normal' | 'mosaic'
+  var activityViewMode = 'normal'; // 'normal' | 'mosaic'
   var dateFilterWindow = null; // { start, end } iso -- set by clicking a "meilleures dates" proposal
   function listingMatchesDateFilter(l){
     if(!dateFilterWindow) return true;
@@ -1923,8 +1931,8 @@
           (destBadge(item) ? '<div class="badge-row">'+destBadge(item)+'</div>' : '') +
           '<div class="card-title">'+(item.url ? '<a href="'+escapeHtml(item.url)+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans nom')+'</a>' : escapeHtml(item.title||'Sans nom'))+'</div>' +
           '<div class="trip-chips">' +
-            '<span class="chip">'+escapeHtml(item.location||'destination ?')+'</span>' +
             (item.price ? '<span class="chip"><b>'+fmtEUR(item.price)+'</b> / pers.</span>' : '') +
+            '<span class="chip">'+escapeHtml(item.location||'destination ?')+'</span>' +
           '</div>' +
           linesToBullets(item.notes, 'activity-notes') +
           commentsHtml +
@@ -1943,6 +1951,7 @@
 
   function renderActivities(){
     var grid = document.getElementById('activityGrid');
+    grid.classList.toggle('mosaic', activityViewMode==='mosaic');
     var destActivities = mapOverview ? state.activities.slice() : state.activities.filter(function(a){ return (a.destination||'autre')===activeDestination; });
 
     if(!destActivities.length){
@@ -2086,6 +2095,13 @@
         listingViewMode = b.dataset.view;
         document.querySelectorAll('#viewModeToggle .seg-btn').forEach(function(x){ x.classList.toggle('active', x===b); });
         renderListings();
+      });
+    });
+    document.querySelectorAll('#activityViewModeToggle .seg-btn').forEach(function(b){
+      b.addEventListener('click', function(){
+        activityViewMode = b.dataset.view;
+        document.querySelectorAll('#activityViewModeToggle .seg-btn').forEach(function(x){ x.classList.toggle('active', x===b); });
+        renderActivities();
       });
     });
     try {
