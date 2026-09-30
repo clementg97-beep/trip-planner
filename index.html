@@ -402,6 +402,10 @@
   .card-title a{ color:var(--ink); text-decoration:none; }
   .card-title a:hover{ color:var(--coral); }
   .badge-row{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:6px; }
+  .total-per-person{
+    margin-left:auto; background:var(--gold); color:#241a03; font-size:10.5px; font-weight:800;
+    padding:5px 11px; border-radius:999px; white-space:nowrap;
+  }
   .trip-chips{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .chip{
     font-size:10.5px; color:var(--ink-soft); background:var(--paper); border:1px solid var(--line);
@@ -1703,13 +1707,16 @@
     var flightDurationChip = (flight && flight.duration) ? '<span class="chip">✈️ '+escapeHtml(flight.duration)+'</span>' : '';
     var drivingTimeChip = (flight && flight.drivingTime) ? '<span class="chip">🚗 '+escapeHtml(flight.drivingTime)+'</span>' : '';
     var hypeBadge = vs.score >= HYPE_THRESHOLD ? '<span class="hype-badge">🔥 Hypé</span>' : '';
+    var totalPerPerson = (perPersonVal!=null && flight && flight.price!=null) ? perPersonVal + flight.price : null;
+    var totalChip = totalPerPerson!=null
+      ? '<span class="total-per-person" title="Logement + vol, par personne">✈️🏠 '+fmtEUR(totalPerPerson)+' / pers.</span>' : '';
     var commentsHtml = renderComments('listing', vs);
 
     return '' +
       '<article class="trip-card">' +
         '<div class="trip-media">'+photo+'</div>' +
         '<div class="trip-main">' +
-          ((destBadge(item)||hypeBadge) ? '<div class="badge-row">'+destBadge(item)+hypeBadge+'</div>' : '') +
+          ((destBadge(item)||hypeBadge||totalChip) ? '<div class="badge-row">'+destBadge(item)+hypeBadge+totalChip+'</div>' : '') +
           '<div class="card-title"><a href="'+escapeHtml(item.url||'#')+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans titre')+'</a></div>' +
           flightStrip(item) +
           '<div class="trip-chips">' +
