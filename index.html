@@ -878,7 +878,7 @@
   var youName = null;
 
   var db = null, sample = null;
-  var state = { trip:null, listings:[], flights:[], activities:[], votes:[], customDestinations:[], availabilities:[] };
+  var state = { trip:null, listings:[], flights:[], activities:[], votes:[], customDestinations:[], availabilities:[], users:[] };
   var COLLECTION_OF = { listing:'listings/', flight:'flights/', activity:'activities/' };
   var mySelectedDates = new Set();
   var lastSavedDates = new Set();
@@ -978,6 +978,13 @@
       youName = user.displayName || user.email || 'Anonyme';
       document.getElementById('youName').textContent = youName;
       gate.hidden = true;
+      // Records that this person has access/signed in, even if they never
+      // do anything else -- otherwise nothing is written until their first
+      // vote/comment/availability save, and "who's connected but hasn't
+      // answered yet" would be unanswerable.
+      if(window.__fbDbReady){
+        window.__fbDbReady.doc('users/' + user.uid).set({ name: youName, lastSeenAt: Date.now() }).catch(function(){});
+      }
     } else {
       youName = null;
       gate.hidden = false;
@@ -1439,10 +1446,18 @@
   function renderAvailProgress(){
     var el = document.getElementById('availProgress');
     if(!el) return;
-    var names = state.availabilities.map(function(a){ return a.name; });
-    el.textContent = names.length
-      ? 'Ont indiqué leurs disponibilités : ' + names.join(', ')
-      : 'Personne n\'a encore répondu.';
+    var respondedNames = state.availabilities.map(function(a){ return a.name; });
+    var pendingNames = state.users
+      .map(function(u){ return u.name; })
+      .filter(function(n){ return respondedNames.indexOf(n)===-1; });
+    var lines = [];
+    lines.push(respondedNames.length
+      ? '✅ Ont indiqué leurs disponibilités : ' + respondedNames.join(', ')
+      : 'Personne n\'a encore répondu.');
+    if(pendingNames.length){
+      lines.push('⏳ Connecté·e·s mais pas encore répondu : ' + pendingNames.join(', '));
+    }
+    el.innerHTML = lines.map(function(l){ return '<div>'+escapeHtml(l)+'</div>'; }).join('');
   }
   function renderPhase(){
     var phase = currentPhase();
@@ -2153,6 +2168,11 @@
       state.availabilities = toArrayWithIds(snap);
       renderPhase();
     }, logDbError('availabilities'));
+
+    db.collection('users').onSnapshot(function(snap){
+      state.users = toArrayWithIds(snap);
+      renderPhase();
+    }, logDbError('users'));
 
     db.collection('listings').onSnapshot(function(snap){
       state.listings = toArrayWithIds(snap);
