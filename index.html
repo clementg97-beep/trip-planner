@@ -576,10 +576,9 @@
 <div class="name-gate" id="nameGate" hidden>
   <div class="name-gate-card">
     <div class="name-gate-emoji">🧳</div>
-    <h2>Qui es-tu ?</h2>
-    <p>Ton prénom identifie tes ajouts, votes et choix — pour que le groupe sache qui propose quoi.</p>
-    <input type="text" id="nameGateInput" placeholder="Ton prénom" autocomplete="given-name" maxlength="30">
-    <button id="nameGateBtn" type="button">C'est parti !</button>
+    <h2>Bienvenue !</h2>
+    <p>Connecte-toi avec Google pour ajouter tes dispos, voter et proposer des voyages.</p>
+    <button id="googleSignInBtn" type="button">🔐 Se connecter avec Google</button>
   </div>
 </div>
 
@@ -592,7 +591,7 @@
     </div>
     <div class="you-pill">
       <span id="youLabel">Vous êtes <b id="youName">—</b></span>
-      <button id="changeNameBtn" type="button">changer</button>
+      <button id="changeNameBtn" type="button">déconnexion</button>
       <button id="phaseToggleBtn" class="phase-btn" type="button"></button>
     </div>
   </header>
@@ -872,9 +871,7 @@
   var ICON_PLANE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>';
   var ICON_STAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z"/></svg>';
 
-  var NAME_KEY = 'tripDossier_voyageurName';
   var youName = null;
-  try { youName = localStorage.getItem(NAME_KEY); } catch(e){}
 
   var db = null, sample = null;
   var state = { trip:null, listings:[], flights:[], activities:[], votes:[], customDestinations:[], availabilities:[] };
@@ -931,22 +928,16 @@
     return name.trim().split(/\s+/).slice(0,2).map(function(p){ return p[0]; }).join('').toUpperCase();
   }
 
-  function ensureName(force){
-    if (youName && !force) return Promise.resolve(youName);
-    var v = null;
-    try { v = window.prompt('Ton prénom, pour identifier tes ajouts et votes :', youName || ''); } catch(e){}
-    if (v && v.trim()){
-      youName = v.trim();
-      try { localStorage.setItem(NAME_KEY, youName); } catch(e){}
-    } else if(!youName){
-      youName = 'Anonyme';
-    }
-    document.getElementById('youName').textContent = youName;
-    renderAll();
+  // Identity now comes from the Google sign-in gate below (fb-auth-changed);
+  // kept as a function since every write call site already does
+  // ensureName().then(function(name){ ... }).
+  function ensureName(){
     return Promise.resolve(youName);
   }
 
-  document.getElementById('changeNameBtn').addEventListener('click', function(){ ensureName(true); });
+  document.getElementById('changeNameBtn').addEventListener('click', function(){
+    if(window.__fbSignOut) window.__fbSignOut();
+  });
 
   document.getElementById('phaseToggleBtn').addEventListener('click', function(){
     if(!db || !isOrganizer()) return;
@@ -972,26 +963,33 @@
     if(!db || !isOrganizer()) return;
     db.doc('trip/info').update({ phase: 'availability' }).catch(function(){});
   });
-  // ---- mandatory identification gate (shown once, on first visit) ----
-  (function initNameGate(){
+  // ---- mandatory sign-in gate (Google auth via the module script near the end of the page) ----
+  document.getElementById('googleSignInBtn').addEventListener('click', function(){
+    if(window.__fbSignIn) window.__fbSignIn();
+  });
+  window.addEventListener('fb-auth-changed', function(e){
+    var user = e.detail;
     var gate = document.getElementById('nameGate');
-    if(youName){ document.getElementById('youName').textContent = youName; return; }
-    gate.hidden = false;
-    var input = document.getElementById('nameGateInput');
-    var btn = document.getElementById('nameGateBtn');
-    function submit(){
-      var v = input.value.trim();
-      if(!v) { input.focus(); return; }
-      youName = v;
-      try { localStorage.setItem(NAME_KEY, youName); } catch(e){}
+    if(user){
+      youName = user.displayName || user.email || 'Anonyme';
       document.getElementById('youName').textContent = youName;
       gate.hidden = true;
-      renderAll();
+    } else {
+      youName = null;
+      gate.hidden = false;
     }
-    btn.addEventListener('click', submit);
-    input.addEventListener('keydown', function(e){ if(e.key==='Enter') submit(); });
-    setTimeout(function(){ input.focus(); }, 50);
-  })();
+    renderAll();
+  });
+  function waitForFirebaseDb(){
+    if(window.__fbDbReady) return Promise.resolve(window.__fbDbReady);
+    return new Promise(function(resolve){
+      var done = false;
+      window.addEventListener('fb-module-loaded', function(){ if(!done){ done = true; resolve(window.__fbDbReady); } }, { once:true });
+      // If Firebase can't load at all (network block, ad blocker...), still
+      // render the page read-only rather than hang on a blank screen forever.
+      setTimeout(function(){ if(!done){ done = true; resolve(null); } }, 8000);
+    });
+  }
 
   // ---- destination tabs ----
   function renderDestTabs(){
@@ -1233,7 +1231,7 @@
   // from casually opening the trips page before the organizer is ready.
   function isOrganizer(){
     var n = (youName || '').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
-    return n === 'clement';
+    return n.split(/\s+/)[0] === 'clement';
   }
   // Only the person who added a listing/activity, or the organizer, may
   // edit or delete it -- everyone else can read and vote/comment only.
@@ -2105,7 +2103,7 @@
       });
     });
     try {
-      db = await claude.use('db');
+      db = await waitForFirebaseDb();
     } catch(e){ db = null; }
 
     if(!db){
@@ -2166,6 +2164,75 @@
 
   init();
 })();
+</script>
+
+<script type="module">
+  // Real Firebase backend (Firestore + Google sign-in) replacing the old
+  // Claude Artifact "db" capability, so friends without a Claude account
+  // can use the app. This module script exposes a plain object/callback
+  // API on window (adapter, sign-in/out, auth-changed event) matching the
+  // shape the classic script above already expects from claude.use('db'),
+  // so none of that script's db.doc()/db.collection() call sites changed.
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+  import {
+    getFirestore, doc, collection, setDoc, updateDoc, deleteDoc, onSnapshot
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+  var firebaseConfig = {
+    apiKey: "AIzaSyAcJX9IBXwlIsNglht81Hm1sedWXc3O3AU",
+    authDomain: "trip-planner-f3e79.firebaseapp.com",
+    projectId: "trip-planner-f3e79",
+    storageBucket: "trip-planner-f3e79.firebasestorage.app",
+    messagingSenderId: "740132829020",
+    appId: "1:740132829020:web:992d8fe1ee8d2916e1b399",
+    measurementId: "G-31VY0972H6"
+  };
+
+  var app = initializeApp(firebaseConfig);
+  var auth = getAuth(app);
+  var firestoreDb = getFirestore(app);
+  var provider = new GoogleAuthProvider();
+
+  function wrapDocSnap(snap){
+    return { id: snap.id, exists: snap.exists(), data: function(){ return snap.data(); } };
+  }
+
+  var adapter = {
+    doc: function(path){
+      var ref = doc(firestoreDb, path);
+      return {
+        set: function(data){ return setDoc(ref, data); },
+        update: function(patch){ return updateDoc(ref, patch); },
+        'delete': function(){ return deleteDoc(ref); },
+        onSnapshot: function(cb, errCb){
+          return onSnapshot(ref, function(snap){ cb(wrapDocSnap(snap)); }, errCb);
+        }
+      };
+    },
+    collection: function(name){
+      var ref = collection(firestoreDb, name);
+      return {
+        onSnapshot: function(cb, errCb){
+          return onSnapshot(ref, function(snap){
+            cb({ docs: snap.docs.map(function(d){ return { id: d.id, data: function(){ return d.data(); } }; }) });
+          }, errCb);
+        }
+      };
+    }
+  };
+
+  window.__fbDbReady = adapter;
+  window.__fbSignIn = function(){
+    signInWithPopup(auth, provider).catch(function(err){ console.error('Google sign-in failed', err); });
+  };
+  window.__fbSignOut = function(){ signOut(auth); };
+  onAuthStateChanged(auth, function(user){
+    window.dispatchEvent(new CustomEvent('fb-auth-changed', { detail: user }));
+  });
+  window.dispatchEvent(new Event('fb-module-loaded'));
 </script>
 
 </body></html>
