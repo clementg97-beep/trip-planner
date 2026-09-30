@@ -125,6 +125,7 @@
     padding:0; -webkit-appearance:none; appearance:none; color-scheme:light dark;
   }
   .stat-input:focus{ outline:2px solid var(--coral); outline-offset:3px; border-radius:4px; }
+  .stat-input:disabled{ color:var(--ink-soft); cursor:not-allowed; }
   .stat-dates{ display:flex; align-items:center; gap:4px; min-width:0; }
   .stat-dates input[type=date]{
     font-size:10.5px; font-weight:600; min-width:0; flex:1 1 0;
@@ -605,6 +606,7 @@
     <div class="stat">
       <div class="k">Voyageurs</div>
       <input type="number" min="1" step="1" class="stat-input" id="statPeople" value="12">
+      <div class="hint" id="statPeopleHint" hidden>🔄 Auto (nb. connectés)</div>
     </div>
     <div class="stat">
       <div class="k">Voyages proposés</div>
@@ -1460,6 +1462,23 @@
     }
     el.innerHTML = lines.map(function(l){ return '<div>'+escapeHtml(l)+'</div>'; }).join('');
   }
+  // While collecting availabilities, "Voyageurs" tracks how many people
+  // have signed in (read-only) instead of being typed by hand -- it
+  // unlocks again once the trips page is open, keeping whatever value
+  // was last synced so it can be corrected for late joiners.
+  function syncPeopleWithConnected(){
+    var sp = document.getElementById('statPeople');
+    if(!sp) return;
+    sp.disabled = true;
+    var hint = document.getElementById('statPeopleHint');
+    if(hint) hint.hidden = false;
+    var count = state.users.length;
+    if(document.activeElement !== sp) sp.value = count;
+    var current = state.trip ? state.trip.people : null;
+    if(db && current !== count){
+      db.doc('trip/info').update({ people: count }).catch(function(){});
+    }
+  }
   function renderPhase(){
     var phase = currentPhase();
     var tripsView = document.getElementById('tripsView');
@@ -1479,6 +1498,7 @@
       }
       buildAvailCalendar();
       renderAvailProgress();
+      syncPeopleWithConnected();
       toggleBtn.textContent = isOrganizer() ? '🔓 Ouvrir la page voyages' : '🔒 Réservé à l\'organisateur';
       toggleBtn.disabled = !isOrganizer();
       var launchBox = document.getElementById('availLaunchBox');
@@ -1488,6 +1508,10 @@
     } else {
       tripsView.hidden = false;
       availView.hidden = true;
+      var sp = document.getElementById('statPeople');
+      if(sp) sp.disabled = false;
+      var spHint = document.getElementById('statPeopleHint');
+      if(spHint) spHint.hidden = true;
       renderBestDates();
       toggleBtn.textContent = isOrganizer() ? '📅 Revenir aux disponibilités' : '🔒 Réservé à l\'organisateur';
       toggleBtn.disabled = !isOrganizer();
