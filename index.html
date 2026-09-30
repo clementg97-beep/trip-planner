@@ -60,7 +60,11 @@
   button{ font-family:inherit; cursor:pointer; }
   input,textarea{ font-family:inherit; }
 
-  .wrap{ max-width:1080px; margin:0 auto; padding:28px 20px 80px; }
+  .wrap{
+    max-width:1080px; margin:0 auto; padding:28px 20px 80px;
+    padding-top:calc(28px + env(safe-area-inset-top, 0px));
+    padding-bottom:calc(80px + env(safe-area-inset-bottom, 0px));
+  }
 
   .name-gate{
     position:fixed; inset:0; z-index:999; background:rgba(19,26,25,.62);
@@ -548,7 +552,11 @@
 
   /* ---- mobile-first tightening (primary target: phone) ---- */
   @media (max-width:480px){
-    .wrap{ padding:16px 14px 64px; }
+    .wrap{
+      padding:16px 14px 64px;
+      padding-top:calc(16px + env(safe-area-inset-top, 0px));
+      padding-bottom:calc(64px + env(safe-area-inset-bottom, 0px));
+    }
     header.hero{ gap:12px; margin-bottom:16px; }
     .trip-title{ font-size:24px; }
     .tag{ font-size:9px; }
