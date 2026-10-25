@@ -177,7 +177,7 @@
   }
   .avail-locked-emoji{ font-size:22px; flex:none; }
   .avail-locked p{ margin:0; font-size:11.5px; color:var(--ink-soft); }
-  .admin-bar{ display:flex; justify-content:flex-end; margin-bottom:10px; }
+  .admin-bar{ display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .admin-bar button{
     background:none; border:1px dashed var(--line); color:var(--ink-soft); border-radius:999px;
     padding:6px 14px; font-size:10.5px; font-weight:600;
@@ -628,8 +628,9 @@
   </div>
 
   <div id="tripsView">
-  <div class="admin-bar" id="adminCloseBar" hidden>
-    <button type="button" id="closeTripsBtn">🔒 Refermer et revenir aux disponibilités</button>
+  <div class="admin-bar" id="adminCloseBar">
+    <button type="button" id="openAvailBtn">📅 Mes disponibilités</button>
+    <button type="button" id="closeTripsBtn" hidden>🔒 Refermer et revenir aux disponibilités</button>
   </div>
   <nav class="tabs" id="destTabs"></nav>
 
@@ -684,6 +685,9 @@
   </div>
 
   <div id="availabilityView" hidden>
+    <div class="admin-bar" id="availBackBar" hidden>
+      <button type="button" id="availBackBtn">← Retour aux voyages</button>
+    </div>
     <div class="avail-intro">
       <h2>📅 Avant toute chose : tes disponibilités</h2>
       <p>Clique un jour pour le sélectionner, ou clique-glisse (glisse le doigt sur mobile) pour sélectionner toute une plage d'un coup. Une fois que tout le monde a répondu, la page des voyages proposés s'ouvrira.</p>
@@ -868,7 +872,7 @@
       </div>
       <div class="full">
         <label>Description (une info par ligne, avec emoji)</label>
-        <textarea data-f="notes" placeholder="⏱️ Durée : demi-journée&#10;🎒 Inclus : guide, transport, équipement&#10;💡 Bon à savoir : …&#10;⚠️ Estimation non vérifiée"></textarea>
+        <textarea data-f="notes" placeholder="💰 Prix : 60 $ / pers.&#10;⏱️ Durée : demi-journée&#10;🎒 Inclus : guide, transport, équipement&#10;💡 Bon à savoir : …&#10;⚠️ Estimation non vérifiée"></textarea>
       </div>
     </div>
     <div class="form-actions">
@@ -978,6 +982,14 @@
     if(!db || !isOrganizer()) return;
     db.doc('trip/info').update({ phase: 'availability' }).catch(function(){});
   });
+  // Local-only view switch (no write to trip/info): lets anyone fill in
+  // their dates after the trips page is open, without changing the phase.
+  document.getElementById('openAvailBtn').addEventListener('click', function(){
+    availPeek = true; renderPhase(); window.scrollTo(0, 0);
+  });
+  document.getElementById('availBackBtn').addEventListener('click', function(){
+    availPeek = false; renderPhase(); window.scrollTo(0, 0);
+  });
   // ---- mandatory sign-in gate (Google auth via the module script near the end of the page) ----
   document.getElementById('googleSignInBtn').addEventListener('click', function(){
     if(window.__fbSignIn) window.__fbSignIn();
@@ -1048,7 +1060,26 @@
     if(db) db.doc('destinations/' + key).set(data).catch(function(){});
     var local = { key:key, id:key, label:data.label, emoji:data.emoji };
     state.customDestinations.push(local);
+    geocodeDest(local);
     return key;
+  }
+
+  // Destinations missing from the embedded places table get real
+  // coordinates from OpenStreetMap's free geocoder (no key), saved on the
+  // destination doc so it runs once per destination, not per visitor.
+  var geocodePending = {};
+  function geocodeDest(d){
+    if(d.lon!=null || geocodePending[d.key]) return;
+    geocodePending[d.key] = true;
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(d.label))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(!res || !res[0]) return;
+        d.lon = Number(res[0].lon); d.lat = Number(res[0].lat);
+        if(db) db.doc('destinations/' + d.key).update({ lon: d.lon, lat: d.lat }).catch(function(){});
+        renderMap();
+      })
+      .catch(function(){});
   }
 
   // ---- geographic map (real Natural Earth country shapes, precomputed) ----
@@ -1088,9 +1119,22 @@
     var found = Object.keys(MAP_DATA.places).find(function(k){ return key.indexOf(k)!==-1 || k.indexOf(key)!==-1; });
     return found ? MAP_DATA.places[found] : null;
   }
+  // [lon,lat] -> map pixel, Mercator fitted against the embedded
+  // places/placeLL pairs.
+  // ponytail: ~5px median error at overview zoom, re-derive from the
+  // projection used to build MAP_DATA if pins ever need to be exact.
+  function projectLL(lon, lat){
+    return { x: 2.13311*lon + 399.18, y: -122.218*Math.log(Math.tan(Math.PI/4 + lat*Math.PI/360)) + 199.52 };
+  }
   function pinXY(key, label){
     if(MAP_DATA.pins[key]) return MAP_DATA.pins[key];
-    return lookupPlace(label);
+    var xy = lookupPlace(label);
+    if(xy) return xy;
+    var d = destInfo(key);
+    if(d.key!==key || d.key==='autre') return null;
+    if(d.lon!=null) return projectLL(d.lon, d.lat);
+    geocodeDest(d);
+    return null;
   }
 
   // Small per-card map thumbnail (replaces the old "no photo" fallback):
@@ -1120,9 +1164,11 @@
     return found ? MAP_DATA.placeLL[found] : null;
   }
   function listingLatLon(item){
+    var d = destInfo(item.destination || 'autre');
     return (item.location && lookupPlaceLL(item.location)) ||
       lookupPlaceLL(item.destination || 'autre') ||
-      lookupPlaceLL(destInfo(item.destination || 'autre').label);
+      lookupPlaceLL(d.label) ||
+      (d.lon!=null ? [d.lon, d.lat] : null);
   }
 
   // OpenStreetMap's own embed endpoint -- free, no API key, and (unlike
@@ -1193,13 +1239,30 @@
     });
   }
 
+  // The default overview frames the Caribbean; if a destination falls
+  // outside it (e.g. Europe), zoom out just enough to fit every pin.
+  function overviewZoom(){
+    var z = MAP_DATA.zoom.overview, W = MAP_DATA.W, H = MAP_DATA.H, pad = 60;
+    var pts = pinDefs().map(function(p){ return pinXY(p.key, p.rawLabel); }).filter(Boolean);
+    var fits = pts.every(function(p){
+      var sx = z.tx + z.scale*p.x, sy = z.ty + z.scale*p.y;
+      return sx >= pad && sx <= W-pad && sy >= pad && sy <= H-pad;
+    });
+    if(fits) return z;
+    var xs = pts.map(function(p){ return p.x; }), ys = pts.map(function(p){ return p.y; });
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    var scale = Math.min(z.scale, (W-2*pad)/((maxX-minX)||1), (H-2*pad)/((maxY-minY)||1));
+    return { scale: scale, tx: W/2 - scale*(minX+maxX)/2, ty: H/2 - scale*(minY+maxY)/2 };
+  }
+
   function renderMap(){
     buildMapOnce();
     buildMapMarkers();
     var info = destInfo(activeDestination);
     var z;
     if(mapOverview){
-      z = MAP_DATA.zoom.overview;
+      z = overviewZoom();
     } else if(MAP_DATA.zoom[activeDestination]){
       z = MAP_DATA.zoom[activeDestination];
     } else {
@@ -1487,23 +1550,28 @@
       db.doc('trip/info').update({ people: count }).catch(function(){});
     }
   }
+  var availPeek = false;
+  function loadMyAvailOnce(){
+    if(availLoadedMine) return;
+    var mine = myAvailDoc();
+    if(mine){
+      mySelectedDates = new Set(mine.dates||[]);
+      lastSavedDates = new Set(mine.dates||[]);
+      availLoadedMine = true;
+    }
+  }
   function renderPhase(){
     var phase = currentPhase();
     var tripsView = document.getElementById('tripsView');
     var availView = document.getElementById('availabilityView');
     var toggleBtn = document.getElementById('phaseToggleBtn');
     if(!tripsView || !availView || !toggleBtn) return;
+    var peek = phase !== 'availability' && availPeek;
+    document.getElementById('availBackBar').hidden = !peek;
     if(phase === 'availability'){
       tripsView.hidden = true;
       availView.hidden = false;
-      if(!availLoadedMine){
-        var mine = myAvailDoc();
-        if(mine){
-          mySelectedDates = new Set(mine.dates||[]);
-          lastSavedDates = new Set(mine.dates||[]);
-          availLoadedMine = true;
-        }
-      }
+      loadMyAvailOnce();
       buildAvailCalendar();
       renderAvailProgress();
       syncPeopleWithConnected();
@@ -1523,8 +1591,16 @@
       renderBestDates();
       toggleBtn.textContent = isOrganizer() ? '📅 Revenir aux disponibilités' : '🔒 Réservé à l\'organisateur';
       toggleBtn.disabled = !isOrganizer();
-      var closeBar = document.getElementById('adminCloseBar');
-      if(closeBar) closeBar.hidden = !isOrganizer();
+      document.getElementById('closeTripsBtn').hidden = !isOrganizer();
+      if(peek){
+        tripsView.hidden = true;
+        availView.hidden = false;
+        document.getElementById('availLaunchBox').hidden = true;
+        document.getElementById('availLockedBox').hidden = true;
+        loadMyAvailOnce();
+        buildAvailCalendar();
+        renderAvailProgress();
+      }
     }
   }
 
@@ -1829,7 +1905,7 @@
     var filterBar = '' +
       '<div class="filter-bar">' +
         '<div class="seg">' +
-          '<button class="seg-btn'+(listingFilters.sort==='score'?' active':'')+'" data-sort="score">🔥 Plus hypés</button>' +
+          '<button class="seg-btn'+(listingFilters.sort==='score'?' active':'')+'" data-sort="score">👍 Plus likés</button>' +
           '<button class="seg-btn'+(listingFilters.sort==='recent'?' active':'')+'" data-sort="recent">🆕 Récents</button>' +
           '<button class="seg-btn'+(listingFilters.sort==='price'?' active':'')+'" data-sort="price" title="Total vol + logement par personne, du moins cher au plus cher">🐀 Moins cher</button>' +
         '</div>' +
@@ -1992,14 +2068,54 @@
   }
 
   // ---- rendering: activities ----
+  // Automatic photo per activity: first French Wikipedia search hit with
+  // an image for the activity name, dropping leading words on a miss
+  // ("Excursion Cayo Levantado" -> "Cayo Levantado"). The result is saved
+  // on the activity doc (photoUrl, '' = nothing found) so each activity
+  // is looked up once ever, not by every visitor -- Wikipedia rate-limits
+  // bursts. Lookups run one at a time for the same reason.
+  var photoQueue = Promise.resolve();
+  var photoPending = {};
+  function wikiPhoto(query){
+    return fetch('https://fr.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=5&prop=pageimages&piprop=thumbnail&pithumbsize=400&gsrsearch=' + encodeURIComponent(query))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        var pages = res && res.query ? Object.values(res.query.pages) : [];
+        pages.sort(function(a,b){ return a.index - b.index; });
+        var hit = pages.find(function(p){ return p.thumbnail; });
+        return hit ? hit.thumbnail.source : '';
+      });
+  }
+  function loadActivityPhoto(item){
+    if(item.photoUrl!=null || photoPending[item.id] || !db) return;
+    photoPending[item.id] = true;
+    var words = (item.title||'').trim().split(/\s+/);
+    photoQueue = photoQueue.then(function tryWords(){
+      if(!words.length || !words[0]) return '';
+      return wikiPhoto(words.join(' ')).then(function(url){
+        if(url || words.length <= 1) return url;
+        words = words.slice(1);
+        return tryWords();
+      });
+    }).then(function(url){
+      // update() is a merge-set that would resurrect a just-deleted doc
+      if(!state.activities.some(function(a){ return a.id===item.id; })) return;
+      db.doc('activities/' + item.id).update({ photoUrl: url }).catch(function(){});
+    }).catch(function(){ /* network/rate-limit: retried on next page load */ });
+  }
+
   function activityCard(item){
     var vs = voteStats('activity', item.id);
     var mv = youName ? myVote('activity', item.id, youName) : null;
     var upOn = mv && mv.value===1, downOn = mv && mv.value===-1;
     var commentsHtml = renderComments('activity', vs);
+    loadActivityPhoto(item);
+    var photo = item.photoUrl ? '<img src="'+escapeHtml(item.photoUrl)+'" alt="'+escapeHtml(item.title||'')+'" loading="lazy">' : ICON_STAR;
+    // "✅" lines in older descriptions are the price line -> shown as 💰
+    var notes = (item.notes||'').replace(/^\s*✅️?/gm, '💰');
     return '' +
       '<article class="trip-card activity-card">' +
-        '<div class="trip-media" style="flex-basis:140px;max-width:140px;">'+ICON_STAR+'</div>' +
+        '<div class="trip-media" style="flex-basis:140px;max-width:140px;">'+photo+'</div>' +
         '<div class="trip-main">' +
           (destBadge(item) ? '<div class="badge-row">'+destBadge(item)+'</div>' : '') +
           '<div class="card-title">'+(item.url ? '<a href="'+escapeHtml(item.url)+'" target="_blank" rel="noopener">'+escapeHtml(item.title||'Sans nom')+'</a>' : escapeHtml(item.title||'Sans nom'))+'</div>' +
@@ -2007,7 +2123,7 @@
             (item.price ? '<span class="chip"><b>'+fmtEUR(item.price)+'</b> / pers.</span>' : '') +
             '<span class="chip">'+escapeHtml(item.location||'destination ?')+'</span>' +
           '</div>' +
-          linesToBullets(item.notes, 'activity-notes') +
+          linesToBullets(notes, 'activity-notes') +
           commentsHtml +
           commentBox('activity', item.id) +
           '<div class="foot">' +

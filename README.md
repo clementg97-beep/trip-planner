@@ -30,6 +30,7 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 
 - Seul l'organisateur (premier mot du nom Google normalisé = "clement", insensible aux accents/majuscules — ex. "Clément Gustin" passe) peut basculer de phase : bouton discret dans l'en-tête, gros bouton "🚀 Ouvrir la page voyages pour tout le monde" sur la page dispos, bouton "🔒 Refermer et revenir aux disponibilités" sur la page voyages.
 - Pour tout le monde d'autre, ces contrôles sont visibles mais désactivés ("🔒 Réservé à l'organisateur"), plus un encart "🔒 En attente que Clément ouvre..." sur la page dispos.
+- Une fois la page voyages ouverte, tout le monde garde un bouton "📅 Mes disponibilités" qui affiche le calendrier **localement** (aucune écriture dans `trip/info`, la phase ne change pas) avec un "← Retour aux voyages".
 - La phase est stockée en base, donc commune à tous et persistante : un ami qui rouvre l'app après l'ouverture retombe directement sur la page voyages.
 - Un nouveau voyage (base neuve, champ `phase` jamais écrit) démarre sur la page disponibilités — pas la page voyages.
 
@@ -41,10 +42,10 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 - Formulaire "Ajouter un voyage" : un vol (trajet, compagnie, dates, prix, durée du vol, temps de route jusqu'au logement) et un logement (lien, titre, lieu, prix, capacité, chambres, avis, piscine/plage/chef...). Pas de photo.
 - Badge doré "total par personne" (logement + vol) en haut à droite de chaque carte, et tri "🐀 Moins cher" basé sur ce même chiffre.
 - Deux vues, pour les voyages **et** les activités : Normale (carte détaillée) et Mosaïque (tuiles compactes, 2 colonnes sur mobile).
-- Filtre de capacité automatique selon le nombre de voyageurs, tri par score/récence/prix, filtre "hypés".
+- Filtre de capacité automatique selon le nombre de voyageurs, tri par score ("👍 Plus likés")/récence/prix, filtre "hypés".
 - Votes (pouce haut/bas) et commentaires sur chaque voyage et activité ; chaque commentaire est modifiable/supprimable par son auteur (ou l'organisateur).
 - Édition du prix et suppression d'une fiche : réservées au créateur de la fiche ou à l'organisateur.
-- Grande carte "Destinations" en SVG (géométrie Natural Earth pré-calculée, ville + pays uniquement) et mini-carte par logement (OpenStreetMap avec repli SVG).
+- Grande carte "Destinations" en SVG (géométrie Natural Earth pré-calculée, ville + pays uniquement). Une nouvelle destination absente de la table embarquée est géocodée une fois via Nominatim (OpenStreetMap, sans clé) et ses `lon`/`lat` sont enregistrées sur le doc `destinations/{id}`. La vue d'ensemble se dézoome automatiquement si un pin sort du cadrage Caraïbes par défaut et mini-carte par logement (OpenStreetMap avec repli SVG).
 - Thème clair/sombre automatique, mise en page pensée d'abord pour téléphone.
 
 ## Droits et identité — limites à connaître
@@ -59,8 +60,8 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 | `trip/info` (doc unique) | `name`, `people`, `phase` |
 | `listings/{id}` | destination, lien, titre, lieu, prix, capacité, dates, équipements, `addedBy`, `createdAt`... |
 | `flights/{id}` | destination, trajet, compagnie, dates, prix, lien, `duration`, `drivingTime`, `addedBy` |
-| `activities/{id}` | destination, titre, lieu, prix, lien, notes, `addedBy` |
-| `destinations/{id}` | destinations personnalisées (`label`, `emoji`) — les 3 destinations de base (Samaná, Cartagène, Monterrico) sont codées en dur dans le JS, pas dans cette collection |
+| `activities/{id}` | destination, titre, lieu, prix, lien, notes, `addedBy`, `photoUrl` (auto) |
+| `destinations/{id}` | destinations personnalisées (`label`, `emoji`, `lon`/`lat` géocodés) — les 3 destinations de base (Samaná, Cartagène, Monterrico) sont codées en dur dans le JS, pas dans cette collection |
 | `votes/{type__id__voter}` | `itemType`, `itemId`, `voter`, `value` (1, -1 ou 0), `comment` |
 | `availabilities/{nom}` | `name`, `dates` (liste ISO `YYYY-MM-DD`), `updatedAt` |
 | `users/{uid}` | `name`, `lastSeenAt` — un doc par personne qui s'est déjà connectée, écrit dès la connexion même si elle ne fait rien d'autre ; sert à afficher qui n'a pas encore répondu |
@@ -95,7 +96,9 @@ Chaque vol est rattaché aux logements par la clé de destination (le vol le moi
 
 ## Points d'attention et décisions passées
 
-- **Photos** : pas d'upload d'images. Ni la capacité `assets` de Claude (rendait l'Artifact interne à l'organisation) ni Firebase Storage n'ont été mis en place. Les fiches n'ont donc pas de photo, juste une mini-carte.
+- **Photos d'activités** : automatiques, via la recherche Wikipedia FR (première page avec image pour le nom de l'activité, en retirant les premiers mots si rien n'est trouvé). Le résultat est enregistré une fois dans `activities/{id}.photoUrl` (`''` = rien trouvé), car Wikipedia limite les rafales de requêtes. Pour forcer une nouvelle recherche, supprimer le champ `photoUrl` dans la console Firestore.
+- **Prix des activités** : les lignes de description qui commencent par ✅ s'affichent avec 💰 (simple remplacement à l'affichage, les données ne sont pas modifiées).
+- **Photos des logements** : pas d'upload d'images. Ni la capacité `assets` de Claude (rendait l'Artifact interne à l'organisation) ni Firebase Storage n'ont été mis en place. Les fiches n'ont donc pas de photo, juste une mini-carte.
 - **Google Maps embed** : testé puis abandonné — bloqué dans le contexte sandboxé de l'ancien Artifact ("Ce contenu est bloqué"). Les mini-cartes essaient l'embed OpenStreetMap (coordonnées de `MAP_DATA.placeLL`), puis retombent sur une mini-carte SVG autonome (`MAP_DATA.places`) si aucune coordonnée n'est trouvée.
 - **Précision des lieux** : repose sur une table embarquée d'une centaine de villes/pays, pas un vrai géocodage. Un lieu absent de la table retombe sur la destination générale.
 - **Classes CSS** : `.trip-title` est réservée au grand titre de page ; les titres de cartes utilisent `.card-title`. Ne pas les fusionner (un conflit de cascade avait fait gonfler les titres de cartes sur mobile).
