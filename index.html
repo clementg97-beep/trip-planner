@@ -239,13 +239,10 @@
   .dest-block-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
   .dest-block-title{ font-size:16px; margin:0; }
   .dest-block-actions{ display:flex; gap:8px; flex-wrap:wrap; }
-  #tripAddSlot:not(:empty){ margin-bottom:6px; }
+  .add-trip-btn{ display:block; margin-bottom:14px; }
+  #tripAddSlot:not(:empty){ margin-bottom:14px; }
   #listingFilterSlot:not(:empty){ margin-top:22px; padding-top:18px; border-top:1px solid var(--line); }
   #listingGrid{ margin-top:16px; }
-  .airport-note{
-    font-size:10.5px; color:var(--ink-soft); line-height:1.5; background:var(--paper-raised);
-    border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:14px;
-  }
 
   .map-section{ margin-bottom:22px; display:flex; }
   .map-card{
@@ -651,6 +648,8 @@
 
   <section class="panel active" id="panel-dest">
     <div class="dest-block">
+      <button class="btn-primary add-trip-btn" id="addTripBtn" type="button">🧳 Ajouter un voyage</button>
+      <div id="tripAddSlot"></div>
       <div class="dest-block-head">
         <h2 class="dest-block-title">✈️🏠 Vol &amp; Logement</h2>
         <div class="dest-block-actions">
@@ -658,11 +657,8 @@
             <button class="seg-btn active" type="button" data-view="normal" title="Vue normale">▦ Normale</button>
             <button class="seg-btn" type="button" data-view="mosaic" title="Vue mosaïque, plus compacte">⊞ Mosaïque</button>
           </div>
-          <button class="add-tile add-tile-inline" id="addTripBtn" type="button"><span class="plus">🧳</span>Ajouter un voyage</button>
         </div>
       </div>
-      <div class="airport-note" id="airportNote"></div>
-      <div id="tripAddSlot"></div>
       <div id="listingFilterSlot"></div>
       <div class="trip-list" id="listingGrid"></div>
     </div>
@@ -900,13 +896,10 @@
   var availLoadedMine = false;
 
   var DESTINATIONS = [
-    { key:'samana', emoji:'🌴', label:'Samaná, Rep Dom', countryId:'214', flightLabel:'✈️ ~4h40 de Montréal',
-      airport:'📍 Aéroport le plus proche : El Catey (AZS), vol direct depuis Montréal.' },
-    { key:'cartagena', emoji:'🏛️', label:'Cartagène, Colombie', countryId:'170', flightLabel:'✈️ ~5h55 de Montréal',
-      airport:'📍 Aéroport le plus proche : Rafael Núñez (CTG), vol direct depuis Montréal.' },
-    { key:'guatemala', emoji:'🌋', label:'Monterrico, Guatemala', countryId:'320', flightLabel:'✈️ ~5h25 de Montréal',
-      airport:'📍 Aéroport le plus proche : La Aurora (GUA), vol direct depuis Montréal.' },
-    { key:'autre', emoji:'📍', label:'Autre / à classer', airport:'' }
+    { key:'samana', emoji:'🌴', label:'Samaná, Rep Dom', countryId:'214', flightLabel:'✈️ ~4h40 de Montréal' },
+    { key:'cartagena', emoji:'🏛️', label:'Cartagène, Colombie', countryId:'170', flightLabel:'✈️ ~5h55 de Montréal' },
+    { key:'guatemala', emoji:'🌋', label:'Monterrico, Guatemala', countryId:'320', flightLabel:'✈️ ~5h25 de Montréal' },
+    { key:'autre', emoji:'📍', label:'Autre / à classer' }
   ];
   function allDests(){
     return DESTINATIONS.slice(0,-1).concat(state.customDestinations, [DESTINATIONS[DESTINATIONS.length-1]]);
@@ -1047,7 +1040,6 @@
         renderAll();
       });
     });
-    document.getElementById('airportNote').textContent = destInfo(activeDestination).airport || '';
     renderMap();
   }
 
