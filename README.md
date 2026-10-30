@@ -42,7 +42,7 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 - Formulaire "Ajouter un voyage" : un vol (trajet, compagnie, dates, prix, durée du vol, temps de route jusqu'au logement) et un logement (lien, titre, lieu, prix, capacité, chambres, avis, piscine/plage/chef...). Pas de photo.
 - Badge doré "total par personne" (logement + vol) en haut à droite de chaque carte, et tri "🐀 Moins cher" basé sur ce même chiffre.
 - Deux vues, pour les voyages **et** les activités : Normale (carte détaillée) et Mosaïque (tuiles compactes, 2 colonnes sur mobile).
-- Filtre de capacité automatique selon le nombre de voyageurs, tri par score ("👍 Plus likés")/récence/prix, filtre "hypés".
+- Tous les logements restent visibles : si la capacité est inférieure au nombre de voyageurs, un avertissement s'affiche en haut de la fiche. Tri par score ("👍 Plus likés")/récence/prix.
 - Votes (pouce haut/bas) et commentaires sur chaque voyage et activité ; chaque commentaire est modifiable/supprimable par son auteur (ou l'organisateur).
 - Édition du prix et suppression d'une fiche : réservées au créateur de la fiche ou à l'organisateur.
 - Grande carte "Destinations" en SVG (géométrie Natural Earth pré-calculée, ville + pays uniquement). Une nouvelle destination absente de la table embarquée est géocodée une fois via Nominatim (OpenStreetMap, sans clé) et ses `lon`/`lat` sont enregistrées sur le doc `destinations/{id}`. La vue d'ensemble se dézoome automatiquement si un pin sort du cadrage Caraïbes par défaut et mini-carte par logement (OpenStreetMap avec repli SVG).
