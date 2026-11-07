@@ -157,7 +157,13 @@
   .best-dates-row .rank{ color:var(--ink-soft); font-weight:600; font-size:9px; flex:none; }
   .best-dates-row b{ flex:1; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:left; }
   .best-dates-row .dur{ color:var(--ink-soft); font-size:9px; flex:none; }
-  .best-dates-row .cnt{ color:var(--teal); font-weight:700; font-size:10px; flex:none; }
+  .best-dates-row .cnt{ color:var(--teal); font-weight:700; font-size:10px; flex:none; text-decoration:underline dotted; padding:0 2px; }
+  .who-bubble{
+    position:absolute; z-index:50; width:240px; max-width:calc(100vw - 32px); background:var(--paper-raised); color:var(--ink);
+    border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:10px 12px; font-size:11px; line-height:1.5;
+  }
+  .who-bubble b{ display:block; font-size:10px; margin-top:6px; }
+  .who-bubble b:first-child{ margin-top:0; }
   .filter-bar-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .date-filter-chip{ background:var(--coral-soft); color:var(--coral); display:flex; align-items:center; gap:6px; }
   .date-filter-chip button{
@@ -623,6 +629,7 @@
       <div class="best-dates-list" id="statBestDatesList">—</div>
     </div>
   </div>
+  <div class="who-bubble" id="whoBubble" hidden></div>
 
   <div id="tripsView">
   <div class="admin-bar" id="adminCloseBar">
@@ -1398,10 +1405,33 @@
       : (s.getDate()+' '+s.toLocaleDateString('fr-CA',{month:'short'}) + ' → ' + e.getDate()+' '+monthLabel);
   }
 
+  // Click on "10/11" -> small floating bubble listing who is / isn't free
+  // for that window. Positioned against the page, not the stats card,
+  // since the card clips its overflow.
+  var bestDatesTop = [];
+  function toggleWhoBubble(el){
+    var bubble = document.getElementById('whoBubble');
+    var idx = el.dataset.who;
+    if(!bubble.hidden && bubble.dataset.idx===idx){ bubble.hidden = true; return; }
+    var w = bestDatesTop[+idx];
+    if(!w) return;
+    var missing = state.availabilities.map(function(a){ return a.name; })
+      .filter(function(n){ return w.names.indexOf(n)===-1; });
+    bubble.innerHTML =
+      '<b>✅ Dispos du '+escapeHtml(fmtRangeShort(w.start, w.end))+' ('+w.names.length+')</b>' + w.names.map(escapeHtml).join(', ') +
+      (missing.length ? '<b>❌ Pas dispos sur toute la période ('+missing.length+')</b>' + missing.map(escapeHtml).join(', ') : '');
+    bubble.dataset.idx = idx;
+    bubble.hidden = false;
+    var r = el.getBoundingClientRect();
+    bubble.style.top = (r.bottom + window.scrollY + 6) + 'px';
+    bubble.style.left = (Math.max(16, Math.min(r.right - bubble.offsetWidth, document.documentElement.clientWidth - bubble.offsetWidth - 16)) + window.scrollX) + 'px';
+  }
+
   function renderBestDates(){
     var list = document.getElementById('statBestDatesList');
     if(!list) return;
     var top = topNonOverlappingWindows(computeBestWindows(), 3);
+    bestDatesTop = top;
     if(!top.length){
       list.innerHTML = '<div class="v mono">—</div><div class="hint">' +
         (state.availabilities.length ? 'Aucune période commune trouvée' : 'En attente des réponses') + '</div>';
@@ -1411,7 +1441,7 @@
       var days = Math.round((dateOfISO(w.end) - dateOfISO(w.start)) / 86400000) + 1;
       var isActive = dateFilterWindow && dateFilterWindow.start===w.start && dateFilterWindow.end===w.end;
       return '<button type="button" class="best-dates-row'+(isActive?' active':'')+'" data-filter-dates="'+w.start+'|'+w.end+'" title="Cliquer pour filtrer les voyages sur cette période">' +
-        '<span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="dur">'+days+'j</span><span class="cnt">'+w.count+'/'+state.availabilities.length+'</span>' +
+        '<span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="dur">'+days+'j</span><span class="cnt" data-who="'+i+'" title="Voir qui est dispo">'+w.count+'/'+state.availabilities.length+'</span>' +
       '</button>';
     }).join('');
   }
@@ -2181,6 +2211,10 @@
       deleteComment(cdParts[0], cdParts[1], cdParts.slice(2).join(':'));
       return;
     }
+    var whoEl = e.target.closest('[data-who]');
+    if(whoEl){ toggleWhoBubble(whoEl); return; }
+    var whoBubble = document.getElementById('whoBubble');
+    if(!whoBubble.hidden && !e.target.closest('#whoBubble')) whoBubble.hidden = true;
     var dateFilterEl = e.target.closest('[data-filter-dates]');
     if(dateFilterEl){
       var dfParts = dateFilterEl.dataset.filterDates.split('|');
