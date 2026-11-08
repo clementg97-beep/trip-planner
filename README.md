@@ -38,7 +38,8 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 
 - Connexion Google obligatoire (Firebase Auth) pour identifier les ajouts, votes et commentaires. Le nom affiché est le nom Google complet.
 - Calendrier de disponibilités : clic ou clic-glisser (souris et tactile) pour sélectionner des plages. Rappel "modifications non enregistrées" tant que la sélection n'est pas sauvegardée. Liste de qui a répondu **et** de qui est connecté mais n'a pas encore répondu.
-- Tuile "Meilleures dates" : jusqu'à 3 périodes non chevauchantes, durée minimale de 6 jours, extension tant que le même groupe reste disponible, classement par nombre de personnes libres tous les jours de la période. Cliquer une proposition filtre les voyages dont les dates chevauchent la période.
+- Tuile "Dispos du groupe" : un mini-calendrier par mois de la fenêtre de dispos, chaque jour affiche le nombre de personnes libres et est coloré quand personne, 1 ou 2 personnes manquent. Cliquer un jour ouvre une bulle avec qui est dispo / pas dispo ce jour-là.
+- Personnes masquées : `HIDDEN_PEOPLE` (prénoms, actuellement Nath et Lucile) les retire de partout à l'affichage (dispos, compteurs, bulle, liste des réponses). Leurs données restent dans Firestore ; retirer un prénom de la liste suffit à les faire réapparaître.
 - Formulaire "Ajouter un voyage" : un vol (trajet, compagnie, dates, prix, durée du vol, temps de route jusqu'au logement) et un logement (lien, titre, lieu, prix, capacité, chambres, avis, piscine/plage/chef...). Pas de photo.
 - Badge doré "total par personne" (logement + vol) en haut à droite de chaque carte, et tri "🐀 Moins cher" basé sur ce même chiffre.
 - Deux vues, pour les voyages **et** les activités : Normale (carte détaillée) et Mosaïque (tuiles compactes, 2 colonnes sur mobile).

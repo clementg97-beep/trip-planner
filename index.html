@@ -142,22 +142,22 @@
   .you-pill .phase-btn{ background:var(--coral-soft); color:var(--coral); }
   .you-pill .phase-btn:disabled{ background:var(--paper); color:var(--ink-soft); cursor:not-allowed; opacity:.8; }
 
-  .stats.stats-3{ grid-template-columns:minmax(110px,1fr) minmax(140px,1.1fr) minmax(150px,1.2fr); }
-  @media (max-width:720px){
-    .stats.stats-3{ grid-template-columns:repeat(2,1fr); }
-    .stats.stats-3 .stat:last-child{ grid-column:1/-1; }
+  .stats.stats-3{ grid-template-columns:repeat(2,1fr); }
+  .stats.stats-3 .stat:last-child{ grid-column:1/-1; }
+  .best-dates-list{ margin-top:6px; display:flex; flex-wrap:wrap; gap:14px; }
+  .dispo-month{ flex:1 1 170px; min-width:0; }
+  .dispo-month h5{ margin:0 0 4px; font-size:10px; text-transform:capitalize; }
+  .dispo-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+  .dispo-day{
+    border:none; border-radius:4px; padding:2px 0; font-family:inherit; font-size:9px; line-height:1.15;
+    background:var(--paper); color:var(--ink-soft); cursor:pointer;
   }
-  .best-dates-list{ margin-top:4px; display:flex; flex-direction:column; gap:3px; }
-  .best-dates-row{
-    display:flex; align-items:baseline; gap:5px; font-size:11px; width:100%;
-    background:none; border:none; padding:2px 0; font-family:inherit; cursor:pointer; border-radius:4px;
-  }
-  .best-dates-row:hover{ background:var(--paper); }
-  .best-dates-row.active{ background:var(--coral-soft); }
-  .best-dates-row .rank{ color:var(--ink-soft); font-weight:600; font-size:9px; flex:none; }
-  .best-dates-row b{ flex:1; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:left; }
-  .best-dates-row .dur{ color:var(--ink-soft); font-size:9px; flex:none; }
-  .best-dates-row .cnt{ color:var(--teal); font-weight:700; font-size:10px; flex:none; text-decoration:underline dotted; padding:0 2px; }
+  .dispo-day small{ display:block; font-size:8px; font-weight:700; }
+  .dispo-day.lv0{ background:var(--teal); color:#fff; }
+  .dispo-day.lv1{ background:color-mix(in srgb, var(--teal) 55%, var(--paper)); color:#fff; }
+  .dispo-day.lv2{ background:color-mix(in srgb, var(--teal) 25%, var(--paper)); color:var(--ink); }
+  .dispo-legend{ display:flex; gap:10px; flex-wrap:wrap; font-size:9px; color:var(--ink-soft); margin-top:4px; }
+  .dispo-legend i{ display:inline-block; padding:0; width:9px; height:9px; border-radius:2px; vertical-align:-1px; margin-right:3px; }
   .who-bubble{
     position:absolute; z-index:50; width:240px; max-width:calc(100vw - 32px); background:var(--paper-raised); color:var(--ink);
     border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:10px 12px; font-size:11px; line-height:1.5;
@@ -624,8 +624,9 @@
       <div class="v mono" id="statListingCount">0</div>
     </div>
     <div class="stat" id="statBestDatesTile">
-      <div class="k">📅 Meilleures dates</div>
-      <div class="hint">👆 Clique une date pour filtrer les voyages</div>
+      <div class="k">📅 Dispos du groupe</div>
+      <div class="hint">👆 Clique un jour pour voir qui est dispo ou non</div>
+      <div class="dispo-legend"><span><i class="dispo-day lv0"></i>tout le monde</span><span><i class="dispo-day lv1"></i>1 absent</span><span><i class="dispo-day lv2"></i>2 absents</span></div>
       <div class="best-dates-list" id="statBestDatesList">—</div>
     </div>
   </div>
@@ -1320,6 +1321,14 @@
     var n = (youName || '').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
     return n.split(/\s+/)[0] === 'clement';
   }
+  // People who left the trip: hidden everywhere (dispos, counts, who
+  // bubble) by first name, but their data stays in Firestore -- remove a
+  // name here to bring them back.
+  var HIDDEN_PEOPLE = ['nath', 'lucile'];
+  function notHiddenPerson(x){
+    var first = (x.name || '').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase().split(/\s+/)[0];
+    return HIDDEN_PEOPLE.indexOf(first) === -1;
+  }
   // Only the person who added a listing/activity, or the organizer, may
   // edit or delete it -- everyone else can read and vote/comment only.
   function canEdit(item){
@@ -1338,112 +1347,52 @@
     return counts;
   }
 
-  // No fixed trip length: for every start day, take the shortest viable
-  // window (MIN_TRIP_DAYS) and, if a group is free for all of it, keep
-  // extending it one day at a time for as long as that exact same group
-  // stays free -- so the result is the longest run at that start with the
-  // best possible headcount, not a headcount forced into a fixed length.
-  var MIN_TRIP_DAYS = 6;
   function namesFreeOn(iso){
     return state.availabilities.filter(function(a){ return (a.dates||[]).indexOf(iso)!==-1; }).map(function(a){ return a.name; });
   }
-  function computeBestWindows(){
-    if(!state.availabilities.length) return [];
-    var w = availWindow();
-    var start = dateOfISO(w.start), end = dateOfISO(w.end);
-    var results = [];
-    for(var d = new Date(start); ; d.setDate(d.getDate()+1)){
-      var winEnd = new Date(d); winEnd.setDate(winEnd.getDate() + MIN_TRIP_DAYS - 1);
-      if(winEnd > end) break;
-      var namesEveryDay = null;
-      for(var i=0; i<MIN_TRIP_DAYS; i++){
-        var dd = new Date(d); dd.setDate(dd.getDate()+i);
-        var names = namesFreeOn(isoOfDate(dd));
-        namesEveryDay = namesEveryDay===null ? names : namesEveryDay.filter(function(n){ return names.indexOf(n)!==-1; });
-      }
-      if(!namesEveryDay.length) continue;
-      var extendedEnd = new Date(winEnd);
-      while(true){
-        var nextDay = new Date(extendedEnd); nextDay.setDate(nextDay.getDate()+1);
-        if(nextDay > end) break;
-        var namesOnNextDay = namesFreeOn(isoOfDate(nextDay));
-        var stillAllPresent = namesEveryDay.every(function(n){ return namesOnNextDay.indexOf(n)!==-1; });
-        if(!stillAllPresent) break;
-        extendedEnd = nextDay;
-      }
-      results.push({ start: isoOfDate(d), end: isoOfDate(extendedEnd), names: namesEveryDay, count: namesEveryDay.length });
-    }
-    results.sort(function(a,b){
-      if(b.count !== a.count) return b.count - a.count;
-      var lenA = (dateOfISO(a.end) - dateOfISO(a.start));
-      var lenB = (dateOfISO(b.end) - dateOfISO(b.start));
-      return lenB - lenA;
-    });
-    return results;
-  }
 
-  // Picks up to n best windows that don't overlap each other, so the
-  // three proposals are genuinely different options rather than the same
-  // week shifted by a day.
-  function topNonOverlappingWindows(results, n){
-    var picked = [];
-    for(var i=0; i<results.length && picked.length<n; i++){
-      var r = results[i];
-      if(r.count<=0) break;
-      var overlaps = picked.some(function(p){ return !(r.end < p.start || r.start > p.end); });
-      if(!overlaps) picked.push(r);
-    }
-    return picked;
-  }
-
-  function fmtRangeShort(startIso, endIso){
-    var s = dateOfISO(startIso), e = dateOfISO(endIso);
-    var sameMonth = s.getMonth()===e.getMonth() && s.getFullYear()===e.getFullYear();
-    var monthLabel = e.toLocaleDateString('fr-CA', { month:'short' });
-    return sameMonth
-      ? (s.getDate() + ' → ' + e.getDate() + ' ' + monthLabel)
-      : (s.getDate()+' '+s.toLocaleDateString('fr-CA',{month:'short'}) + ' → ' + e.getDate()+' '+monthLabel);
-  }
-
-  // Click on "10/11" -> small floating bubble listing who is / isn't free
-  // for that window. Positioned against the page, not the stats card,
-  // since the card clips its overflow.
-  var bestDatesTop = [];
+  // Click on a day of the "Dispos du groupe" calendar -> small floating
+  // bubble listing who is / isn't free that day. Positioned against the
+  // page, not the stats card, since the card clips its overflow.
   function toggleWhoBubble(el){
     var bubble = document.getElementById('whoBubble');
-    var idx = el.dataset.who;
-    if(!bubble.hidden && bubble.dataset.idx===idx){ bubble.hidden = true; return; }
-    var w = bestDatesTop[+idx];
-    if(!w) return;
+    var iso = el.dataset.who;
+    if(!bubble.hidden && bubble.dataset.idx===iso){ bubble.hidden = true; return; }
+    var free = namesFreeOn(iso);
     var missing = state.availabilities.map(function(a){ return a.name; })
-      .filter(function(n){ return w.names.indexOf(n)===-1; });
+      .filter(function(n){ return free.indexOf(n)===-1; });
     bubble.innerHTML =
-      '<b>✅ Dispos du '+escapeHtml(fmtRangeShort(w.start, w.end))+' ('+w.names.length+')</b>' + w.names.map(escapeHtml).join(', ') +
-      (missing.length ? '<b>❌ Pas dispos sur toute la période ('+missing.length+')</b>' + missing.map(escapeHtml).join(', ') : '');
-    bubble.dataset.idx = idx;
+      '<b>✅ Dispos le '+escapeHtml(fmtDayMonth(iso))+' ('+free.length+')</b>' + (free.map(escapeHtml).join(', ') || '—') +
+      (missing.length ? '<b>❌ Pas dispos ('+missing.length+')</b>' + missing.map(escapeHtml).join(', ') : '');
+    bubble.dataset.idx = iso;
     bubble.hidden = false;
     var r = el.getBoundingClientRect();
     bubble.style.top = (r.bottom + window.scrollY + 6) + 'px';
-    bubble.style.left = (Math.max(16, Math.min(r.right - bubble.offsetWidth, document.documentElement.clientWidth - bubble.offsetWidth - 16)) + window.scrollX) + 'px';
+    bubble.style.left = (Math.max(16, Math.min(r.left, document.documentElement.clientWidth - bubble.offsetWidth - 16)) + window.scrollX) + 'px';
   }
 
+  // One mini month per month of the availability window; each day shows
+  // how many people are free and is shaded when nobody, 1 or 2 are missing.
   function renderBestDates(){
     var list = document.getElementById('statBestDatesList');
     if(!list) return;
-    var top = topNonOverlappingWindows(computeBestWindows(), 3);
-    bestDatesTop = top;
-    if(!top.length){
-      list.innerHTML = '<div class="v mono">—</div><div class="hint">' +
-        (state.availabilities.length ? 'Aucune période commune trouvée' : 'En attente des réponses') + '</div>';
-      return;
+    var total = state.availabilities.length;
+    if(!total){ list.innerHTML = '<div class="hint">En attente des réponses</div>'; return; }
+    var w = availWindow(), counts = dayCounts();
+    var startD = dateOfISO(w.start), endD = dateOfISO(w.end);
+    var html = '';
+    for(var m = new Date(startD.getFullYear(), startD.getMonth(), 1); m <= endD; m.setMonth(m.getMonth()+1)){
+      var cells = '';
+      for(var i=0; i<(m.getDay()+6)%7; i++) cells += '<span></span>';
+      var last = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate();
+      for(var day=1; day<=last; day++){
+        var iso = isoOfDate(new Date(m.getFullYear(), m.getMonth(), day));
+        var c = counts[iso] || 0, miss = total - c;
+        cells += '<button type="button" class="dispo-day'+(c && miss<3 ? ' lv'+miss : '')+'" data-who="'+iso+'" title="'+c+'/'+total+' dispos">'+day+'<small>'+(c||'·')+'</small></button>';
+      }
+      html += '<div class="dispo-month"><h5>'+escapeHtml(m.toLocaleDateString('fr-CA',{month:'long'}))+'</h5><div class="dispo-grid">'+cells+'</div></div>';
     }
-    list.innerHTML = top.map(function(w, i){
-      var days = Math.round((dateOfISO(w.end) - dateOfISO(w.start)) / 86400000) + 1;
-      var isActive = dateFilterWindow && dateFilterWindow.start===w.start && dateFilterWindow.end===w.end;
-      return '<button type="button" class="best-dates-row'+(isActive?' active':'')+'" data-filter-dates="'+w.start+'|'+w.end+'" title="Cliquer pour filtrer les voyages sur cette période">' +
-        '<span class="rank">'+(i+1)+'.</span><b>'+fmtRangeShort(w.start, w.end)+'</b><span class="dur">'+days+'j</span><span class="cnt" data-who="'+i+'" title="Voir qui est dispo">'+w.count+'/'+state.availabilities.length+'</span>' +
-      '</button>';
-    }).join('');
+    list.innerHTML = html;
   }
 
   function buildAvailCalendar(){
@@ -2215,16 +2164,6 @@
     if(whoEl){ toggleWhoBubble(whoEl); return; }
     var whoBubble = document.getElementById('whoBubble');
     if(!whoBubble.hidden && !e.target.closest('#whoBubble')) whoBubble.hidden = true;
-    var dateFilterEl = e.target.closest('[data-filter-dates]');
-    if(dateFilterEl){
-      var dfParts = dateFilterEl.dataset.filterDates.split('|');
-      var newWindow = { start: dfParts[0], end: dfParts[1] };
-      var isSame = dateFilterWindow && dateFilterWindow.start===newWindow.start && dateFilterWindow.end===newWindow.end;
-      dateFilterWindow = isSame ? null : newWindow;
-      renderListings();
-      renderBestDates();
-      return;
-    }
     var voteEl = e.target.closest('[data-vote]');
     if(voteEl){
       var parts = voteEl.dataset.vote.split(':');
@@ -2330,12 +2269,12 @@
     }, logDbError('trip'));
 
     db.collection('availabilities').onSnapshot(function(snap){
-      state.availabilities = toArrayWithIds(snap);
+      state.availabilities = toArrayWithIds(snap).filter(notHiddenPerson);
       renderPhase();
     }, logDbError('availabilities'));
 
     db.collection('users').onSnapshot(function(snap){
-      state.users = toArrayWithIds(snap);
+      state.users = toArrayWithIds(snap).filter(notHiddenPerson);
       renderPhase();
     }, logDbError('users'));
 
