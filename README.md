@@ -53,7 +53,8 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 ## Droits et identité — limites à connaître
 
 - L'organisateur est déterminé par le **nom du compte Google connecté**, pas par un vrai rôle en base. Quelqu'un qui nommerait son compte Google "Clément" passerait la vérification — acceptable entre amis, pas une vraie sécurité.
-- `canEdit()` (modifier le prix, supprimer) compare le nom affiché au champ `addedBy` de la fiche. Pas de vraie ACL côté serveur au-delà des règles Firestore (voir plus bas), qui ne font qu'exiger d'être connecté.
+- Chaque voyage a un bouton **modifier** (rouvre le formulaire prérempli ; le vol modifié est celui de la destination, partagé par ses voyages) et **supprimer** demande une confirmation (voyages et activités).
+- `canEdit()` (modifier le voyage ou le prix, supprimer) compare le nom affiché au champ `addedBy` de la fiche. Pas de vraie ACL côté serveur au-delà des règles Firestore (voir plus bas), qui ne font qu'exiger d'être connecté.
 
 ## Modèle de données (Firestore)
 

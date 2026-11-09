@@ -1857,7 +1857,7 @@
               '<button class="thumb'+(downOn?' down-on':'')+'" data-thumb="down:listing:'+item.id+'">👎 '+vs.down+'</button>' +
               '<button class="thumb" data-comment="listing:'+item.id+'" title="Commenter">💬</button>' +
             '</div>' +
-            '<span class="by">ajouté par '+escapeHtml(item.addedBy||'?')+editedMention(item)+(canEdit(item) ? ' · <button class="del" data-del="listing:'+item.id+'">supprimer</button>' : '')+'</span>' +
+            '<span class="by">ajouté par '+escapeHtml(item.addedBy||'?')+editedMention(item)+(canEdit(item) ? ' · <button class="del" data-edit-trip="'+item.id+'">modifier</button> · <button class="del" data-del="listing:'+item.id+'">supprimer</button>' : '')+'</span>' +
           '</div>' +
         '</div>' +
       '</article>';
@@ -1918,14 +1918,38 @@
     }
   }
 
-  function showTripForm(forDestKey, wantNewDest){
+  // editItem: an existing listing -> same form, prefilled, saved in place.
+  // The flight shown on a card is the destination's flight (flightForDest),
+  // so editing it updates that shared flight doc.
+  function showTripForm(forDestKey, wantNewDest, editItem){
     var slot = document.getElementById('tripAddSlot');
     var tpl = document.getElementById('tpl-trip-form').content.cloneNode(true);
     var formCard = tpl.querySelector('.form-card');
     slot.innerHTML = '';
     slot.appendChild(formCard);
     var destSelect = formCard.querySelector('[data-f=destination]');
-    fillDestinationSelect(destSelect, forDestKey || activeDestination);
+    fillDestinationSelect(destSelect, editItem ? (editItem.destination || 'autre') : (forDestKey || activeDestination));
+    var editFlight = editItem ? flightForDest(editItem.destination || 'autre') : null;
+    if(editItem){
+      formCard.querySelector('h3').textContent = 'Modifier le voyage';
+      formCard.querySelector('.form-hint').hidden = true;
+      formCard.querySelector('[data-action=save]').textContent = 'Enregistrer';
+      var put = function(f, v){
+        var el = formCard.querySelector('[data-f='+f+']');
+        if(!el || v==null) return;
+        if(el.type==='checkbox') el.checked = !!v; else el.value = v;
+      };
+      ['url','title','location','price','pricePerNight','capacity','dateStart','dateEnd','bedrooms','beds','bathrooms','rating','reviewCount','beach','pool','chef','highlights','notes']
+        .forEach(function(f){ put(f, editItem[f]); });
+      put('links', (editItem.links||[]).join('\n'));
+      if(editFlight){
+        put('route', editFlight.route); put('airline', editFlight.airline);
+        put('flightDateStart', editFlight.dateStart); put('flightDateEnd', editFlight.dateEnd);
+        put('flightPrice', editFlight.price); put('flightUrl', editFlight.url);
+        put('flightDuration', editFlight.duration); put('drivingTime', editFlight.drivingTime);
+      }
+      slot.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     var newOpt = document.createElement('option');
     newOpt.value = '__new__';
     newOpt.textContent = '➕ Nouvelle destination…';
@@ -1954,7 +1978,7 @@
       }
       if(!route){ formCard.querySelector('[data-f=route]').focus(); return; }
       if(!url || !title){ formCard.querySelector('[data-f=url]').focus(); return; }
-      saveBtn.disabled = true; saveBtn.textContent = 'Création en cours…';
+      saveBtn.disabled = true; saveBtn.textContent = editItem ? 'Enregistrement…' : 'Création en cours…';
       ensureName().then(function(name){
         var now = Date.now();
         var dest = destSelect.value === '__new__'
@@ -1989,7 +2013,16 @@
           url: get('flightUrl'), duration: get('flightDuration'), drivingTime: get('drivingTime'),
           addedBy: name, createdAt: now
         };
-        if(db){
+        if(db && editItem){
+          // keep who created it and when; aiSummary stays as is
+          delete listing.addedBy; delete listing.createdAt; delete listing.aiSummary;
+          delete flight.addedBy; delete flight.createdAt;
+          db.doc('listings/' + editItem.id).update(listing).catch(function(){});
+          // moved to another destination: don't drag the old destination's
+          // shared flight along, give the new one its own
+          if(editFlight && dest === (editItem.destination || 'autre')) db.doc('flights/' + editFlight.id).update(flight).catch(function(){});
+          else db.doc('flights/' + uid()).set(Object.assign(flight, { addedBy: name, createdAt: now })).catch(function(){});
+        } else if(db){
           db.doc('listings/' + uid()).set(listing).catch(function(){});
           db.doc('flights/' + uid()).set(flight).catch(function(){});
         }
@@ -2210,12 +2243,20 @@
       editPrice(priceEl.dataset.priceEdit);
       return;
     }
+    var editTripEl = e.target.closest('[data-edit-trip]');
+    if(editTripEl){
+      var editItem = state.listings.find(function(x){ return x.id===editTripEl.dataset.editTrip; });
+      if(canEdit(editItem)) showTripForm(null, false, editItem);
+      return;
+    }
     var delEl = e.target.closest('[data-del]');
     if(delEl){
       var dparts = delEl.dataset.del.split(':');
       var delSource = dparts[0]==='listing' ? state.listings : state.activities;
       var delItem = delSource.find(function(x){ return x.id===dparts[1]; });
       if(!db || !canEdit(delItem)) return;
+      var delWhat = dparts[0]==='listing' ? 'ce voyage' : 'cette activité';
+      if(!window.confirm('Supprimer '+delWhat+' « '+(delItem.title||'Sans titre')+' » ? Cette action est définitive.')) return;
       db.doc(COLLECTION_OF[dparts[0]] + dparts[1])['delete']().catch(function(){});
       return;
     }
