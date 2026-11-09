@@ -25,14 +25,15 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 
 | Phase | Ce que voient les amis |
 | --- | --- |
-| `availability` (défaut si le champ n'existe pas encore) | Calendrier de disponibilités (janvier à mars 2027 par défaut) |
-| `trips` | Carte, voyages proposés, activités, vote |
+| `availability` | Calendrier de disponibilités (janvier à mars 2027 par défaut) |
+| `trips` (défaut, y compris pendant le chargement) | Carte, voyages proposés, activités, vote |
 
 - Seul l'organisateur (premier mot du nom Google normalisé = "clement", insensible aux accents/majuscules — ex. "Clément Gustin" passe) peut basculer de phase : bouton discret dans l'en-tête, gros bouton "🚀 Ouvrir la page voyages pour tout le monde" sur la page dispos, bouton "🔒 Refermer et revenir aux disponibilités" sur la page voyages.
 - Pour tout le monde d'autre, ces contrôles sont visibles mais désactivés ("🔒 Réservé à l'organisateur"), plus un encart "🔒 En attente que Clément ouvre..." sur la page dispos.
 - Une fois la page voyages ouverte, tout le monde garde un bouton "📅 Mes disponibilités" qui affiche le calendrier **localement** (aucune écriture dans `trip/info`, la phase ne change pas) avec un "← Retour aux voyages".
 - La phase est stockée en base, donc commune à tous et persistante : un ami qui rouvre l'app après l'ouverture retombe directement sur la page voyages.
-- Un nouveau voyage (base neuve, champ `phase` jamais écrit) démarre sur la page disponibilités — pas la page voyages.
+- La page voyages est la page principale : sans champ `phase` (ou avant que `trip/info` soit chargé), tout le monde arrive sur la page voyages. Avant, ce cas affichait un calendrier de dispos vide pendant le chargement et des amis ressaisissaient leurs dates.
+- Bouton 🔄 en haut à droite : recharge la page (utile dans l'app installée sur téléphone, qui n'a pas de bouton de rechargement).
 
 ## Fonctionnalités
 

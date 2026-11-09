@@ -606,6 +606,7 @@
       <span id="youLabel">Vous êtes <b id="youName">—</b></span>
       <button id="changeNameBtn" type="button">déconnexion</button>
       <button id="phaseToggleBtn" class="phase-btn" type="button"></button>
+      <button id="refreshBtn" type="button" title="Rafraîchir la page" aria-label="Rafraîchir la page">🔄</button>
     </div>
   </header>
 
@@ -950,6 +951,10 @@
   function ensureName(){
     return Promise.resolve(youName);
   }
+
+  // Installed as an app (PWA) there is no browser reload button, and a
+  // page left open for days can lose its live connection and show empty.
+  document.getElementById('refreshBtn').addEventListener('click', function(){ location.reload(); });
 
   document.getElementById('changeNameBtn').addEventListener('click', function(){
     if(window.__fbSignOut) window.__fbSignOut();
@@ -1306,10 +1311,10 @@
     };
   }
   function currentPhase(){
-    // A brand-new trip (no trip/info doc yet, or no phase field on it)
-    // starts on the availability calendar -- friends fill in their dates
-    // first, and only the organizer can move things to the trips page.
-    return (state.trip && state.trip.phase) || 'availability';
+    // The trips page is the main page for everyone. Also covers the moment
+    // before trip/info has loaded: defaulting to the availability view then
+    // flashed an empty calendar, and people re-entered their dates.
+    return (state.trip && state.trip.phase) || 'trips';
   }
   // Self-reported name match, not real auth -- good enough to stop friends
   // from casually opening the trips page before the organizer is ready.
