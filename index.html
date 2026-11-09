@@ -144,20 +144,16 @@
 
   .stats.stats-3{ grid-template-columns:repeat(2,1fr); }
   .stats.stats-3 .stat:last-child{ grid-column:1/-1; }
-  .best-dates-list{ margin-top:6px; display:flex; flex-wrap:wrap; gap:14px; }
-  .dispo-month{ flex:1 1 170px; min-width:0; }
-  .dispo-month h5{ margin:0 0 4px; font-size:10px; text-transform:capitalize; }
-  .dispo-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
-  .dispo-day{
-    border:none; border-radius:4px; padding:2px 0; font-family:inherit; font-size:9px; line-height:1.15;
-    background:var(--paper); color:var(--ink-soft); cursor:pointer;
-  }
-  .dispo-day small{ display:block; font-size:8px; font-weight:700; }
-  .dispo-day.lv0{ background:var(--teal); color:#fff; }
-  .dispo-day.lv1{ background:color-mix(in srgb, var(--teal) 55%, var(--paper)); color:#fff; }
-  .dispo-day.lv2{ background:color-mix(in srgb, var(--teal) 25%, var(--paper)); color:var(--ink); }
-  .dispo-legend{ display:flex; gap:10px; flex-wrap:wrap; font-size:9px; color:var(--ink-soft); margin-top:4px; }
-  .dispo-legend i{ display:inline-block; padding:0; width:9px; height:9px; border-radius:2px; vertical-align:-1px; margin-right:3px; }
+  .best-dates-list{ margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+  .dispo-row{ display:flex; align-items:center; gap:6px; }
+  .dispo-row > span{ flex:none; width:30px; font-size:9.5px; font-weight:700; text-transform:capitalize; }
+  .dispo-strip{ flex:1; display:grid; grid-template-columns:repeat(31,1fr); gap:2px; }
+  .dispo-day{ border:none; padding:0; height:18px; border-radius:3px; background:var(--line); cursor:pointer; }
+  .dispo-day.lv0{ background:var(--teal); }
+  .dispo-day.lv1{ background:#e0b64a; }
+  .dispo-day.lv2{ background:color-mix(in srgb, var(--coral) 55%, var(--line)); }
+  .dispo-axis i{ font-style:normal; font-size:8px; color:var(--ink-soft); }  .dispo-legend{ display:flex; gap:10px; flex-wrap:wrap; font-size:9px; color:var(--ink-soft); margin-top:4px; }
+  .dispo-legend i{ display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:-1px; margin-right:3px; }
   .who-bubble{
     position:absolute; z-index:50; width:240px; max-width:calc(100vw - 32px); background:var(--paper-raised); color:var(--ink);
     border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:10px 12px; font-size:11px; line-height:1.5;
@@ -625,7 +621,7 @@
     </div>
     <div class="stat" id="statBestDatesTile">
       <div class="k">📅 Dispos du groupe</div>
-      <div class="hint">👆 Clique un jour pour voir qui est dispo ou non</div>
+      <div class="hint">👆 Touche un jour pour voir qui est dispo ou non</div>
       <div class="dispo-legend"><span><i class="dispo-day lv0"></i>tout le monde</span><span><i class="dispo-day lv1"></i>1 absent</span><span><i class="dispo-day lv2"></i>2 absents</span></div>
       <div class="best-dates-list" id="statBestDatesList">—</div>
     </div>
@@ -1371,8 +1367,9 @@
     bubble.style.left = (Math.max(16, Math.min(r.left, document.documentElement.clientWidth - bubble.offsetWidth - 16)) + window.scrollX) + 'px';
   }
 
-  // One mini month per month of the availability window; each day shows
-  // how many people are free and is shaded when nobody, 1 or 2 are missing.
+  // Compact strip: one row per month of the availability window, one small
+  // square per day, colored when nobody, 1 or 2 people are missing. Tap a
+  // square for the who bubble (date + names).
   function renderBestDates(){
     var list = document.getElementById('statBestDatesList');
     if(!list) return;
@@ -1383,15 +1380,15 @@
     var html = '';
     for(var m = new Date(startD.getFullYear(), startD.getMonth(), 1); m <= endD; m.setMonth(m.getMonth()+1)){
       var cells = '';
-      for(var i=0; i<(m.getDay()+6)%7; i++) cells += '<span></span>';
       var last = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate();
       for(var day=1; day<=last; day++){
         var iso = isoOfDate(new Date(m.getFullYear(), m.getMonth(), day));
         var c = counts[iso] || 0, miss = total - c;
-        cells += '<button type="button" class="dispo-day'+(c && miss<3 ? ' lv'+miss : '')+'" data-who="'+iso+'" title="'+c+'/'+total+' dispos">'+day+'<small>'+(c||'·')+'</small></button>';
+        cells += '<button type="button" class="dispo-day'+(c && miss<3 ? ' lv'+miss : '')+'" data-who="'+iso+'" title="'+day+' : '+c+'/'+total+' dispos"></button>';
       }
-      html += '<div class="dispo-month"><h5>'+escapeHtml(m.toLocaleDateString('fr-CA',{month:'long'}))+'</h5><div class="dispo-grid">'+cells+'</div></div>';
+      html += '<div class="dispo-row"><span>'+escapeHtml(m.toLocaleDateString('fr-CA',{month:'short'}).replace('.',''))+'</span><div class="dispo-strip">'+cells+'</div></div>';
     }
+    html += '<div class="dispo-row dispo-axis"><span></span><div class="dispo-strip"><i style="grid-column:1">1</i><i style="grid-column:10">10</i><i style="grid-column:20">20</i><i style="grid-column:30">30</i></div></div>';
     list.innerHTML = html;
   }
 

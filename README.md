@@ -38,7 +38,7 @@ Le champ `phase` du document `trip/info` pilote ce que voient tous les visiteurs
 
 - Connexion Google obligatoire (Firebase Auth) pour identifier les ajouts, votes et commentaires. Le nom affiché est le nom Google complet.
 - Calendrier de disponibilités : clic ou clic-glisser (souris et tactile) pour sélectionner des plages. Rappel "modifications non enregistrées" tant que la sélection n'est pas sauvegardée. Liste de qui a répondu **et** de qui est connecté mais n'a pas encore répondu.
-- Tuile "Dispos du groupe" : un mini-calendrier par mois de la fenêtre de dispos, chaque jour affiche le nombre de personnes libres et est coloré quand personne, 1 ou 2 personnes manquent. Cliquer un jour ouvre une bulle avec qui est dispo / pas dispo ce jour-là.
+- Tuile "Dispos du groupe" : bandeau compact, une ligne par mois et une petite case par jour, colorée quand personne, 1 ou 2 personnes manquent. Cliquer un jour ouvre une bulle avec qui est dispo / pas dispo ce jour-là.
 - Personnes masquées : `HIDDEN_PEOPLE` (prénoms, actuellement Nath et Lucile) les retire de partout à l'affichage (dispos, compteurs, bulle, liste des réponses). Leurs données restent dans Firestore ; retirer un prénom de la liste suffit à les faire réapparaître.
 - Formulaire "Ajouter un voyage" : un vol (trajet, compagnie, dates, prix, durée du vol, temps de route jusqu'au logement) et un logement (lien, titre, lieu, prix, capacité, chambres, avis, piscine/plage/chef...). Pas de photo.
 - Badge doré "total par personne" (logement + vol) en haut à droite de chaque carte, et tri "🐀 Moins cher" basé sur ce même chiffre.
