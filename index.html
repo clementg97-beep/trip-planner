@@ -1363,7 +1363,7 @@
     var missing = state.availabilities.map(function(a){ return a.name; })
       .filter(function(n){ return free.indexOf(n)===-1; });
     bubble.innerHTML =
-      '<b>✅ Dispos le '+escapeHtml(fmtDayMonth(iso))+' ('+free.length+')</b>' + (free.map(escapeHtml).join(', ') || '—') +
+      '<b>✅ Dispos le '+escapeHtml(new Date(iso+'T00:00:00').toLocaleDateString('fr-CA',{weekday:'long', day:'numeric', month:'long'}))+' ('+free.length+')</b>' + (free.map(escapeHtml).join(', ') || '—') +
       (missing.length ? '<b>❌ Pas dispos ('+missing.length+')</b>' + missing.map(escapeHtml).join(', ') : '');
     bubble.dataset.idx = iso;
     bubble.hidden = false;
