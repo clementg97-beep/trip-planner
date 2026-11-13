@@ -400,7 +400,11 @@
   }
   .trip-media img{ width:100%; height:100%; object-fit:cover; position:absolute; inset:0; }
   .trip-media svg{ width:28px; height:28px; opacity:.4; }
-  .trip-media .mini-map{ position:absolute; inset:0; width:100%; height:100%; display:block; border:none; }
+  .trip-media .photo-btn{
+    position:absolute; right:8px; bottom:8px; z-index:1; border:none; border-radius:999px; padding:5px 10px;
+    font:inherit; font-size:11px; font-weight:700; background:rgba(255,255,255,.9); color:var(--ink); cursor:pointer;
+  }
+  .trip-media .photo-btn:hover{ color:var(--coral); }
   .trip-main{ flex:1; min-width:0; padding:16px 18px; display:flex; flex-direction:column; gap:10px; }
   .card-title{ font-size:15px; font-weight:700; line-height:1.3; }
   .card-title a{ color:var(--ink); text-decoration:none; }
@@ -774,6 +778,11 @@
         <label>Lien de l'annonce (Airbnb, Booking, Voyage Privé…) *</label>
         <input type="url" data-f="url" placeholder="https://www.airbnb.fr/rooms/…" required>
       </div>
+      <div class="full">
+        <label>📷 Photo du voyage (celle qui s'affiche sur la carte)</label>
+        <input type="file" accept="image/*" data-photo-input>
+        <img data-photo-preview alt="" hidden style="margin-top:8px;max-width:220px;max-height:140px;border-radius:10px;object-fit:cover;">
+      </div>
       <div>
         <label>Titre *</label>
         <input type="text" data-f="title" placeholder="Villa avec piscine, Comporta" required>
@@ -1138,81 +1147,30 @@
     return null;
   }
 
-  // Small per-card map thumbnail (replaces the old "no photo" fallback):
-  // a real Google Maps embed for genuine address-level precision, instead
-  // of our hand-approximated destination coordinates. No API key needed
-  // -- the "output=embed" query form is a plain public iframe endpoint.
-  // Small per-card map thumbnail. A Google Maps iframe was tried here for
-  // real geocoded precision, but Google blocks embedding inside this
-  // sandboxed Artifact context ("Ce contenu est bloque"), so this stays
-  // on the self-contained SVG approach: same world geometry as the big
-  // destination map, zoomed on this one listing's city. Country paths
-  // are cached once since they're identical across every card.
-  var _miniMapCountriesHtml = null;
-  function miniMapCountriesHtml(){
-    if(_miniMapCountriesHtml===null){
-      _miniMapCountriesHtml = MAP_DATA.countries.map(function(c){ return '<path class="map-country" d="'+c.d+'"></path>'; }).join('');
-    }
-    return _miniMapCountriesHtml;
+  // Trip photo, picked by whoever adds the trip: shrunk in the browser to
+  // a ~800px JPEG data URL and stored on the listing doc itself.
+  // ponytail: data URL in Firestore (1 MB doc cap, ~100-200 KB here);
+  // move to Firebase Storage if photos ever need to be bigger or many.
+  function compressPhoto(file){
+    return new Promise(function(resolve, reject){
+      var img = new Image();
+      img.onload = function(){
+        var max = 800, s = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(img.src);
+        resolve(c.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = function(){ reject(new Error('image illisible')); };
+      img.src = URL.createObjectURL(file);
+    });
   }
-  // Looks up real [lon,lat] for a place (mirrors lookupPlace, which uses
-  // approximate map-pixel coords instead) against the embedded lat/lon
-  // table, for services that need genuine geographic coordinates.
-  function lookupPlaceLL(label){
-    var key = normPlaceName(label);
-    if(MAP_DATA.placeLL[key]) return MAP_DATA.placeLL[key];
-    var found = Object.keys(MAP_DATA.placeLL).find(function(k){ return key.indexOf(k)!==-1 || k.indexOf(key)!==-1; });
-    return found ? MAP_DATA.placeLL[found] : null;
-  }
-  function listingLatLon(item){
-    var d = destInfo(item.destination || 'autre');
-    return (item.location && lookupPlaceLL(item.location)) ||
-      lookupPlaceLL(item.destination || 'autre') ||
-      lookupPlaceLL(d.label) ||
-      (d.lon!=null ? [d.lon, d.lat] : null);
-  }
-
-  // OpenStreetMap's own embed endpoint -- free, no API key, and (unlike
-  // Google's embed) explicitly meant to be framed on third-party pages,
-  // so it survives the Artifact sandbox where Google's iframe got blocked.
-  function listingOsmEmbed(item){
-    var ll = listingLatLon(item);
-    if(!ll) return null;
-    var lon = ll[0], lat = ll[1];
-    var d = 0.06;
-    var bbox = (lon-d)+','+(lat-d)+','+(lon+d)+','+(lat+d);
+  function listingPhoto(item){
+    if(item.photo) return '<img src="'+escapeHtml(item.photo)+'" alt="'+escapeHtml(item.title||'')+'" loading="lazy">';
     var label = (item.location && item.location.trim()) || destInfo(item.destination || 'autre').label;
-    return '<iframe class="mini-map" src="https://www.openstreetmap.org/export/embed.html?bbox='+bbox+'&layer=mapnik&marker='+lat+','+lon+
-      '" loading="lazy" title="Carte de '+escapeHtml(label)+'"></iframe>';
-  }
-
-  // Self-contained SVG fallback (same world geometry as the big
-  // destination map) if OSM's embed is ever unreachable or the place
-  // has no known lat/lon.
-  function listingSvgMapThumb(item){
-    var fallbackLabel = destInfo(item.destination || 'autre').label;
-    var xy = (item.location && lookupPlace(item.location)) || pinXY(item.destination || 'autre', fallbackLabel);
-    if(!xy) return null;
-    var scale = 7;
-    var tx = +(MAP_DATA.W/2 - xy.x*scale).toFixed(1);
-    var ty = +(MAP_DATA.H/2 - xy.y*scale).toFixed(1);
-    var labelParts = (item.location || fallbackLabel).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
-    var cityLabel = labelParts[0];
-    var countryLabel = labelParts[1] || (fallbackLabel.split(',')[1] || '').trim();
-    return '' +
-      '<svg class="mini-map" viewBox="0 0 '+MAP_DATA.W+' '+MAP_DATA.H+'" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Carte de '+escapeHtml(cityLabel)+'">' +
-        '<rect x="0" y="0" width="'+MAP_DATA.W+'" height="'+MAP_DATA.H+'" fill="var(--teal-soft)"></rect>' +
-        '<g transform="translate('+tx+','+ty+') scale('+scale+')">' + miniMapCountriesHtml() + '</g>' +
-        '<g class="map-pin">' +
-          '<path class="pin-shape" d="'+PIN_PATH_D+'" transform="translate('+(MAP_DATA.W/2)+','+(MAP_DATA.H/2)+')"></path>' +
-          '<circle class="pin-hole" cx="'+(MAP_DATA.W/2)+'" cy="'+(MAP_DATA.H/2-20)+'" r="7.5"></circle>' +
-          '<text class="pin-city" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+26)+'" text-anchor="middle">'+escapeHtml(cityLabel)+'</text>' +
-          (countryLabel ? '<text class="pin-country" x="'+(MAP_DATA.W/2)+'" y="'+(MAP_DATA.H/2+46)+'" text-anchor="middle">'+escapeHtml(countryLabel)+'</text>' : '') +
-        '</g>' +
-      '</svg>';
-  }
-  function listingMapThumb(item){
-    return listingOsmEmbed(item) || listingSvgMapThumb(item);
+    return '<div class="photo-fallback" style="position:absolute;inset:0;display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;padding:10px;text-align:center;font-weight:700;color:var(--ink-soft);">' +
+      ICON_HOUSE + '<span>'+escapeHtml(label)+'</span></div>';
   }
 
   function buildMapMarkers(){
@@ -1772,7 +1730,7 @@
 
   // ---- rendering: listings ----
   var HYPE_THRESHOLD = 3;
-  var listingFilters = { sort:'score' };
+  var listingFilters = { sort:'recent' };
   var listingViewMode = 'normal'; // 'normal' | 'mosaic'
   var activityViewMode = 'normal'; // 'normal' | 'mosaic'
   var dateFilterWindow = null; // { start, end } iso -- set by clicking a "meilleures dates" proposal
@@ -1795,10 +1753,8 @@
     var vs = voteStats('listing', item.id);
     var mv = youName ? myVote('listing', item.id, youName) : null;
     var upOn = mv && mv.value===1, downOn = mv && mv.value===-1;
-    var photo = listingMapThumb(item) ||
-      '<div class="photo-fallback" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--coral-soft),var(--teal-soft));">' +
-        ICON_HOUSE +
-      '</div>';
+    var photo = listingPhoto(item) + (canEdit(item)
+      ? '<button type="button" class="photo-btn" data-photo-trip="'+item.id+'">📷 '+(item.photo ? 'Changer' : 'Ajouter une photo')+'</button>' : '');
     var mapUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.title + ', ' + (item.location||''));
     var dateChip = (item.dateStart && item.dateEnd) ? '<span class="chip">🗓️ '+escapeHtml(fmtDayMonth(item.dateStart))+' - '+escapeHtml(fmtDayMonth(item.dateEnd))+'</span>' : '';
     var nightsChip = '';
@@ -1878,8 +1834,8 @@
     var filterBar = '' +
       '<div class="filter-bar">' +
         '<div class="seg">' +
-          '<button class="seg-btn'+(listingFilters.sort==='score'?' active':'')+'" data-sort="score">👍 Plus likés</button>' +
           '<button class="seg-btn'+(listingFilters.sort==='recent'?' active':'')+'" data-sort="recent">🆕 Récents</button>' +
+          '<button class="seg-btn'+(listingFilters.sort==='score'?' active':'')+'" data-sort="score">👍 Plus likés</button>' +
           '<button class="seg-btn'+(listingFilters.sort==='price'?' active':'')+'" data-sort="price" title="Total vol + logement par personne, du moins cher au plus cher">🐀 Moins cher</button>' +
         '</div>' +
         '<div class="filter-bar-right">' +
@@ -1969,6 +1925,18 @@
 
     formCard.querySelector('[data-action=cancel]').addEventListener('click', function(){ slot.innerHTML=''; });
     var saveBtn = formCard.querySelector('[data-action=save]');
+    var pickedPhoto = null;
+    var photoPreview = formCard.querySelector('[data-photo-preview]');
+    if(editItem && editItem.photo){ photoPreview.src = editItem.photo; photoPreview.hidden = false; }
+    formCard.querySelector('[data-photo-input]').addEventListener('change', function(ev){
+      var file = ev.target.files[0];
+      if(!file) return;
+      saveBtn.disabled = true;
+      compressPhoto(file).then(function(dataUrl){
+        pickedPhoto = dataUrl; photoPreview.src = dataUrl; photoPreview.hidden = false;
+      }).catch(function(){ alert('Impossible de lire cette image, essaie une autre photo.'); })
+        .then(function(){ saveBtn.disabled = false; });
+    });
     saveBtn.addEventListener('click', function(){
       if(saveBtn.disabled) return;
       var get = function(f){ return formCard.querySelector('[data-f='+f+']').value.trim(); };
@@ -2006,6 +1974,7 @@
           links: get('links').split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean),
           notes: get('notes'), addedBy: name, createdAt: now, updatedAt: now, updatedBy: name, aiSummary: null
         };
+        if(pickedPhoto) listing.photo = pickedPhoto;
         var flight = {
           destination: dest, route: route, airline: get('airline'),
           dateStart: get('flightDateStart') || null, dateEnd: get('flightDateEnd') || null,
@@ -2241,6 +2210,22 @@
     var priceEl = e.target.closest('[data-price-edit]');
     if(priceEl){
       editPrice(priceEl.dataset.priceEdit);
+      return;
+    }
+    var photoEl = e.target.closest('[data-photo-trip]');
+    if(photoEl){
+      var photoItem = state.listings.find(function(x){ return x.id===photoEl.dataset.photoTrip; });
+      if(!db || !canEdit(photoItem)) return;
+      var picker = document.createElement('input');
+      picker.type = 'file'; picker.accept = 'image/*';
+      picker.addEventListener('change', function(){
+        if(!picker.files[0]) return;
+        photoEl.disabled = true; photoEl.textContent = '⏳ Envoi…';
+        compressPhoto(picker.files[0])
+          .then(function(dataUrl){ return db.doc('listings/' + photoItem.id).update({ photo: dataUrl }); })
+          .catch(function(){ photoEl.disabled = false; photoEl.textContent = '⚠️ Échec, réessayer'; });
+      });
+      picker.click();
       return;
     }
     var editTripEl = e.target.closest('[data-edit-trip]');
