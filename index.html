@@ -1042,7 +1042,8 @@
     var overviewBtn = '<button class="tab tab-overview'+(mapOverview?' active':'')+'" id="mapOverviewTab" type="button">🌍 Vue d\'ensemble</button>';
     var destTabsHtml = allDests().map(function(d){
       var n = state.listings.filter(function(l){ return (l.destination||'autre')===d.key; }).length;
-      if(d.key==='autre' && n===0) return '';
+      // empty destinations get no tab (still offered in the add-trip form); keep the one being viewed
+      if(n===0 && (mapOverview || d.key!==activeDestination)) return '';
       var labelLines = d.label.split(',').map(function(s){ return s.trim(); }).map(escapeHtml).join('<br>');
       return '<button class="tab'+(!mapOverview && d.key===activeDestination?' active':'')+'" data-dest="'+d.key+'">'+d.emoji+' '+labelLines+' <span class="count">('+n+')</span></button>';
     }).join('');
