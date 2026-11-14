@@ -1099,7 +1099,12 @@
   // on-screen size instead of ballooning when the map zooms in.
   var mapBuilt = false;
   function pinDefs(){
-    return allDests().filter(function(d){ return d.key!=='autre'; }).map(function(d){
+    // same rule as the tabs: no pin for a destination without trips, unless it's the one being viewed
+    return allDests().filter(function(d){
+      if(d.key==='autre') return false;
+      if(!mapOverview && d.key===activeDestination) return true;
+      return state.listings.some(function(l){ return (l.destination||'autre')===d.key; });
+    }).map(function(d){
       return { key:d.key, rawLabel:d.label };
     });
   }
