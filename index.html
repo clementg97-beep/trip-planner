@@ -1670,6 +1670,15 @@
       db.doc('votes/' + vid)['delete']().catch(function(){});
     }
   }
+  // Organizer only: who voted what. Hidden in the UI only; Firestore rules still let any signed-in user read votes.
+  function voterNamesHtml(vs){
+    if(!isOrganizer()) return '';
+    var names = function(val){ return vs.all.filter(function(x){ return x.value===val; }).map(function(x){ return escapeHtml(x.voter); }).join(', '); };
+    var up = names(1), down = names(-1);
+    if(!up && !down) return '';
+    return '<div class="voters" style="font-size:12px;color:var(--ink-soft);margin:6px 0 2px;">🔒 ' +
+      (up ? '👍 '+up : '') + (up && down ? ' · ' : '') + (down ? '👎 '+down : '') + '</div>';
+  }
   function renderComments(type, vs){
     if(!vs.comments.length) return '';
     return '<div class="comments">' + vs.comments.map(function(c){
@@ -1818,6 +1827,7 @@
           '</div>' +
           commentsHtml +
           commentBox('listing', item.id) +
+          voterNamesHtml(vs) +
           '<div class="foot">' +
             '<div class="thumbs">' +
               '<button class="thumb'+(upOn?' up-on':'')+'" data-thumb="up:listing:'+item.id+'">👍 '+vs.up+'</button>' +
@@ -2102,6 +2112,7 @@
           linesToBullets(notes, 'activity-notes') +
           commentsHtml +
           commentBox('activity', item.id) +
+          voterNamesHtml(vs) +
           '<div class="foot">' +
             '<div class="thumbs">' +
               '<button class="thumb'+(upOn?' up-on':'')+'" data-thumb="up:activity:'+item.id+'">👍 '+vs.up+'</button>' +
