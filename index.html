@@ -1607,14 +1607,15 @@
     return { up:up.length, down:down.length, score:up.length-down.length, comments:comments, all:v };
   }
   function voteId(type,id,voter){ return type+'__'+id+'__'+voter.replace(/[^a-zA-Z0-9_-]/g,'_'); }
+  function voterKey(name){ return (name||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase(); }
   function myVote(type, id, name){
-    return state.votes.find(function(v){ return v.itemType===type && v.itemId===id && v.voter===name; });
+    return state.votes.find(function(v){ return v.itemType===type && v.itemId===id && voterKey(v.voter)===voterKey(name); });
   }
   function castVote(type, id, value){
     ensureName().then(function(name){
       if(!db) return;
-      var vid = voteId(type,id,name);
       var existing = myVote(type, id, name);
+      var vid = existing ? existing.id : voteId(type,id,name);
       if(existing && existing.value === value){
         if(existing.comment){
           db.doc('votes/' + vid).set({ itemType:type, itemId:id, voter:name, value:0, comment:existing.comment }).catch(function(){});
@@ -1653,7 +1654,7 @@
     ensureName().then(function(name){
       if(!db) return;
       var existing = myVote(type, id, name);
-      var vid = voteId(type,id,name);
+      var vid = existing ? existing.id : voteId(type,id,name);
       db.doc('votes/' + vid).set({ itemType:type, itemId:id, voter:name, value:(existing ? existing.value : 0), comment:text.trim() }).catch(function(){});
     });
   }
@@ -2356,7 +2357,14 @@
     }, logDbError('activities'));
 
     db.collection('votes').onSnapshot(function(snap){
-      state.votes = toArrayWithIds(snap);
+      // one vote per person per item: the same Google account can show up as "Fanny Dulac" and "fanny dulac"
+      // (prefers the copy under the current spelling, so toggling edits that one)
+      var byKey = {};
+      toArrayWithIds(snap).forEach(function(v){
+        var k = v.itemType + '|' + v.itemId + '|' + voterKey(v.voter);
+        if(!byKey[k] || v.voter === youName) byKey[k] = v;
+      });
+      state.votes = Object.keys(byKey).map(function(k){ return byKey[k]; });
       renderListings();
       renderFlights();
       renderActivities();
